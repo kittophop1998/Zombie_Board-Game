@@ -1,0 +1,70 @@
+// ประเภทของไพ่
+export enum CardType {
+  NUMBER = 'NUMBER',
+  ZOMBIE = 'ZOMBIE',
+  SHOTGUN = 'SHOTGUN',
+  VACCINE = 'VACCINE'
+}
+
+// ดอกไพ่
+export enum CardSuit {
+  SPADES = 'SPADES',      // โพดำ - Black1
+  CLUBS = 'CLUBS',        // ดอกจิก - Black2
+  DIAMONDS = 'DIAMONDS',  // ข้าวหลามตัด - Red1
+  HEARTS = 'HEARTS'       // โพแดง - Red2
+}
+
+// สถานะผู้เล่น
+export enum PlayerStatus {
+  HUMAN = 'HUMAN',
+  ZOMBIE = 'ZOMBIE',
+  ELIMINATED = 'ELIMINATED'
+}
+
+// ไพ่
+export interface Card {
+  id: string;
+  type: CardType;
+  suit?: CardSuit;
+  value?: number; // 1-13 สำหรับไพ่ตัวเลข
+}
+
+// ผู้เล่น
+export interface Player {
+  id: string;
+  name: string;
+  teamId: number;
+  status: PlayerStatus;
+  cards: Card[];
+  isReady: boolean;
+}
+
+// โต๊ะเล่น (Battle)
+export interface Battle {
+  id: string;
+  player1Id: string;
+  player2Id: string;
+  player1Cards: Card[];
+  player2Cards: Card[];
+  player1CardsRevealed: boolean[];
+  player2CardsRevealed: boolean[];
+  winnerId?: string;
+  isComplete: boolean;
+}
+
+// ห้องเกม
+export interface GameRoom {
+  id: string;
+  players: Player[];
+  currentBattle?: Battle;
+  gameStarted: boolean;
+  gameEnded: boolean;
+  winningTeam?: 'HUMAN' | 'ZOMBIE';
+}
+
+// สถานะเกมสำหรับ Client
+export interface GameState {
+  room: GameRoom | null;
+  myPlayerId: string | null;
+  myPlayer: Player | null;
+}

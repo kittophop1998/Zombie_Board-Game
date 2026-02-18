@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🧟 Zombie Card Game
 
-## Getting Started
+เกมการ์ดซอมบี้ที่เล่นผ่าน Local Network โดยใช้ WebSocket เพื่อการเล่นแบบเรียลไทม์
 
-First, run the development server:
+## ✨ คุณสมบัติ
 
-```bash
+- 🎮 เล่นผ่าน Local Network ได้หลายคน
+- 🔄 เรียลไทม์ด้วย Socket.io
+- 🎨 UI สวยงามทันสมัยด้วย Material-UI
+- 🃏 ระบบไพ่พิเศษ (ซอมบี้, ปืนลูกซอง, วัคซีน)
+- 👥 แบ่งทีมอัตโนมัติ
+- ⚔️ ระบบแบทเทิลแบบตัวต่อตัว
+
+## 🎯 กติกาเกม
+
+### การเริ่มเกม
+1. สร้างห้องเกมและแชร์รหัสห้องให้เพื่อน
+2. ผู้เล่นเข้าร่วมห้องด้วยรหัสห้อง
+3. เมื่อทุกคนพร้อม กดปุ่ม "พร้อมเล่น"
+4. เกมจะเริ่มเมื่อทุกคนพร้อม
+
+### ไพ่ในเกม
+- **ไพ่ตัวเลข** (1-13): ไพ่ 4 ดอก (♥ ♦ ♣ ♠) ใช้สำหรับแบทเทิล
+- **ไพ่ซอมบี้**: ชนะทุกไพ่ และแพร่เชื้อให้ผู้แพ้
+- **ไพ่ปืนลูกซอง**: กำจัดซอมบี้ได้
+- **ไพ่วัคซีน**: เปลี่ยนซอมบี้กลับเป็นมนุษย์
+
+### วิธีเล่น
+1. ผู้เล่นแต่ละคนได้รับไพ่ 7 ใบ + ไพ่พิเศษ
+2. เลือกผู้เล่นคนอื่นเพื่อเริ่มแบทเทิล
+3. วางไพ่ที่มีดอกเดียวกัน
+4. ผู้ที่มีแต้มสูงกว่าชนะ
+5. ผู้ชนะได้รับไพ่หนึ่งใบจากผู้แพ้
+
+### ไพ่พิเศษ
+- **ไพ่ซอมบี้**: วางในแบทเทิลได้ ชนะทุกไพ่ และทำให้ผู้แพ้กลายเป็นซอมบี้
+- **ไพ่ปืนลูกซอง**: ใช้กำจัดซอมบี้ได้ทันที (ใช้แล้วหายไป)
+- **ไพ่วัคซีน**: ใช้รักษาซอมบี้กลับเป็นมนุษย์ (ไม่สามารถใช้กับตัวเองได้)
+
+### เงื่อนไขการจบเกม
+เกมจะจบเมื่อ:
+- ทุกคนกลายเป็นซอมบี้ (ซอมบี้ชนะ)
+- ซอมบี้ถูกกำจัดหมด (มนุษย์ชนะ)
+- ผู้เล่นหมดไพ่ตัวเลข (ฝ่ายที่มีคนมากกว่าชนะ)
+
+## 🚀 การติดตั้ง
+
+\`\`\`bash
+# ติดตั้ง dependencies
+npm install
+
+# รันเซิร์ฟเวอร์
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+\`\`\`
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🎮 วิธีใช้งาน
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. เปิดเบราว์เซอร์ไปที่ \`http://localhost:3000\`
+2. กดปุ่ม "สร้างห้องใหม่" และใส่ชื่อของคุณ
+3. คัดลอกรหัสห้องที่ได้รับ
+4. ส่งรหัสห้องให้เพื่อนๆ ที่อยู่ใน Local Network เดียวกัน
+5. เพื่อนเปิด \`http://<your-ip>:3000\` และเข้าร่วมห้องด้วยรหัส
+6. เมื่อทุกคนพร้อม กด "พร้อมเล่น"
+7. เริ่มเล่นเกม!
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📝 หมายเหตุ
 
-## Learn More
+- ต้องเล่นผ่าน Local Network เดียวกัน (WiFi หรือ LAN เดียวกัน)
+- แนะนำให้มีผู้เล่น 3-8 คนสำหรับประสบการณ์ที่ดีที่สุด
+- ใช้เบราว์เซอร์สมัยใหม่ (Chrome, Firefox, Safari, Edge)
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠 เทคโนโลยี
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Next.js 16**: React Framework
+- **Socket.io**: WebSocket สำหรับการสื่อสารแบบเรียลไทม์
+- **Material-UI (MUI)**: UI Components
+- **TypeScript**: Type Safety
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📱 การเล่นบนมือถือ
 
-## Deploy on Vercel
+เกมรองรับการเล่นบนมือถือ เพียงเปิดเบราว์เซอร์บนมือถือและเข้าที่ URL เดียวกัน
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🎨 UI Features
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- ✅ Responsive Design - เล่นได้ทั้ง Desktop และ Mobile
+- ✅ แสดงสถานะผู้เล่น (มนุษย์/ซอมบี้/ถูกกำจัด)
+- ✅ แสดงจำนวนไพ่ของแต่ละคน
+- ✅ แสดงการแบทเทิลแบบเรียลไทม์
+- ✅ แจ้งเตือนเหตุการณ์ต่างๆ
+- ✅ Theme สีสวยงาม
+
+Enjoy the game! 🎉
