@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Player, PlayerStatus } from '../types/game';
 import { 
   Card, 
@@ -93,8 +92,7 @@ export default function PlayerCard({ player, isCurrentPlayer, onSelect, showStat
           {(showStatus || isCurrentPlayer) && player.status !== PlayerStatus.HUMAN && (
             <Chip 
               label={getStatusText()}
-              color={player.status === PlayerStatus.ZOMBIE ? 'success' : 
-                     player.status === PlayerStatus.HUMAN ? 'primary' : 'default'}
+              color={player.status === PlayerStatus.ZOMBIE ? 'success' : 'default'}
               icon={getStatusIcon()}
               size="small"
             />
@@ -105,12 +103,6 @@ export default function PlayerCard({ player, isCurrentPlayer, onSelect, showStat
               label={`ไพ่: ${player.cards.length}`}
               size="small"
               variant="outlined"
-            />
-            <Chip 
-              label={`ทีม ${player.teamId + 1}`}
-              size="small"
-              variant="outlined"
-              color="secondary"
             />
           </Box>
         </Stack>

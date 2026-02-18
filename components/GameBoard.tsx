@@ -389,7 +389,7 @@ export default function GameBoard() {
         </Alert>
       )}
 
-      {room.currentBattle && (
+      {room.currentBattle && (room.currentBattle.player1Id === myPlayerId || room.currentBattle.player2Id === myPlayerId) && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           <Typography variant="body1">
             ⚔️ <strong>คลิกที่ไพ่ของคุณ 3 ใบ</strong> เพื่อวางลงในกระดาน
@@ -397,8 +397,16 @@ export default function GameBoard() {
         </Alert>
       )}
 
-      {/* Current Battle */}
-      {room.currentBattle && (
+      {room.currentBattle && room.currentBattle.player1Id !== myPlayerId && room.currentBattle.player2Id !== myPlayerId && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <Typography variant="body1">
+            👀 <strong>{room.players.find(p => p.id === room.currentBattle?.player1Id)?.name}</strong> vs <strong>{room.players.find(p => p.id === room.currentBattle?.player2Id)?.name}</strong> กำลังแบทเทิลกัน
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Current Battle - แสดงเฉพาะคนที่เกี่ยวข้อง */}
+      {room.currentBattle && (room.currentBattle.player1Id === myPlayerId || room.currentBattle.player2Id === myPlayerId) && (
         <Paper elevation={3} sx={{ p: 3, mb: 3, bgcolor: '#fff3e0' }}>
           <Typography variant="h6" gutterBottom>
             ⚔️ การแบทเทิลกำลังดำเนินการ
@@ -618,18 +626,13 @@ export default function GameBoard() {
         </DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
-            เลือกเป้าหมาย:
+            {specialCardType === CardType.SHOTGUN 
+              ? 'เลือกผู้เล่นที่คุณคิดว่าเป็นซอมบี้:'
+              : 'เลือกผู้เล่นที่ต้องการรักษา:'}
           </Typography>
           <Stack spacing={1}>
             {room.players
-              .filter(p => {
-                if (specialCardType === CardType.SHOTGUN) {
-                  return p.status === PlayerStatus.ZOMBIE && p.id !== myPlayerId;
-                } else if (specialCardType === CardType.VACCINE) {
-                  return p.status === PlayerStatus.ZOMBIE && p.id !== myPlayerId;
-                }
-                return false;
-              })
+              .filter(p => p.id !== myPlayerId && p.status !== PlayerStatus.ELIMINATED)
               .map(player => (
                 <Button
                   key={player.id}
@@ -638,9 +641,15 @@ export default function GameBoard() {
                   fullWidth
                 >
                   {player.name}
+                  {player.id === myPlayerId && ' (คุณ)'}
                 </Button>
               ))}
           </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+            {specialCardType === CardType.SHOTGUN 
+              ? 'หมายเหตุ: ถ้ายิงผิดคนอาจจะเสียไพ่เปล่าๆ'
+              : 'หมายเหตุ: วัคซีนใช้ได้เฉพาะคนที่เป็นซอมบี้'}
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowSpecialCardDialog(false)}>ยกเลิก</Button>

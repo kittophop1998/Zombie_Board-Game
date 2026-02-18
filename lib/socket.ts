@@ -362,24 +362,23 @@ function resolveBattle(room: GameRoom, io: SocketServer) {
     battle.winnerId = winnerId;
     const winner = winnerId === player1.id ? player1 : player2;
     const loser = winnerId === player1.id ? player2 : player1;
+    const loserBattleCards = winnerId === player1.id ? battle.player2Cards : battle.player1Cards;
     
     const total1 = calculateTotalValue(battle.player1Cards);
     const total2 = calculateTotalValue(battle.player2Cards);
     
-    // ผู้ชนะได้รับไพ่หนึ่งใบจากผู้แพ้
-    if (loser.cards.length > 0) {
-      const stolenCardIndex = Math.floor(Math.random() * loser.cards.length);
-      const stolenCard = loser.cards.splice(stolenCardIndex, 1)[0];
+    // ผู้ชนะได้รับไพ่ตัวเลขหนึ่งใบจากไพ่ที่ผู้แพ้วางลงในกระดาน battle
+    const loserNumberCardsInBattle = loserBattleCards.filter(c => c.type === CardType.NUMBER);
+    if (loserNumberCardsInBattle.length > 0) {
+      const randomIndex = Math.floor(Math.random() * loserNumberCardsInBattle.length);
+      const stolenCard = loserNumberCardsInBattle[randomIndex];
+      
+      // เพิ่มไพ่ให้ผู้ชนะ
       winner.cards.push(stolenCard);
       
-      // ถ้าไพ่ที่ได้คือไพ่ซอมบี้ ผู้แพ้ติดเชื้อ
-      if (stolenCard.type === CardType.ZOMBIE) {
-        loser.status = PlayerStatus.ZOMBIE;
-        loser.cards.push({
-          id: `zombie-${Date.now()}`,
-          type: CardType.ZOMBIE
-        });
-      }
+      io.to(room.id).emit('message', { 
+        message: `${winner.name} ได้ไพ่ตัวเลข ${stolenCard.value} จากกระดาน battle!` 
+      });
     }
     
     // เช็คว่ามีไพ่ซอมบี้ในไพ่ที่วางหรือไม่
@@ -387,17 +386,27 @@ function resolveBattle(room: GameRoom, io: SocketServer) {
     const hasZombieInPlayer2Cards = battle.player2Cards.some(c => c.type === CardType.ZOMBIE);
     
     if (hasZombieInPlayer1Cards && winnerId === player1.id) {
-      loser.status = PlayerStatus.ZOMBIE;
-      loser.cards.push({
-        id: `zombie-${Date.now()}`,
-        type: CardType.ZOMBIE
-      });
+      if (loser.status !== PlayerStatus.ZOMBIE) {
+        loser.status = PlayerStatus.ZOMBIE;
+        loser.cards.push({
+          id: `zombie-${Date.now()}`,
+          type: CardType.ZOMBIE
+        });
+        io.to(room.id).emit('message', { 
+          message: `${loser.name} ติดเชื้อซอมบี้!` 
+        });
+      }
     } else if (hasZombieInPlayer2Cards && winnerId === player2.id) {
-      loser.status = PlayerStatus.ZOMBIE;
-      loser.cards.push({
-        id: `zombie-${Date.now()}`,
-        type: CardType.ZOMBIE
-      });
+      if (loser.status !== PlayerStatus.ZOMBIE) {
+        loser.status = PlayerStatus.ZOMBIE;
+        loser.cards.push({
+          id: `zombie-${Date.now()}`,
+          type: CardType.ZOMBIE
+        });
+        io.to(room.id).emit('message', { 
+          message: `${loser.name} ติดเชื้อซอมบี้!` 
+        });
+      }
     }
     
     io.to(room.id).emit('message', { 
