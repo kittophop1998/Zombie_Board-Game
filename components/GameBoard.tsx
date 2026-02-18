@@ -9,7 +9,6 @@ import {
   CardType, 
   PlayerStatus 
 } from '../types/game';
-import { countPlayersByStatus } from '../lib/gameLogic';
 import {
   Container,
   Box,
@@ -32,8 +31,6 @@ import {
   Add,
   Login,
   ContentCopy,
-  Person,
-  Coronavirus,
   PlayArrow,
   Visibility
 } from '@mui/icons-material';
@@ -62,9 +59,9 @@ export default function GameBoard() {
   const [specialCardType, setSpecialCardType] = useState<CardType | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<Player | null>(null);
   
-  // Messages
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
   const initSocket = useCallback(async () => {
     await fetch('/api/socket');
@@ -122,6 +119,32 @@ export default function GameBoard() {
       }
     };
   }, [initSocket]);
+
+  // Timer effect - นับเวลาถอยหลัง
+  useEffect(() => {
+    if (!room?.gameStarted || room.gameEnded || !room.gameEndTime) {
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = room.gameEndTime! - now;
+      
+      if (remaining <= 0) {
+        setTimeRemaining(0);
+      } else {
+        setTimeRemaining(remaining);
+      }
+    };
+
+    // อัพเดททันที
+    updateTimer();
+
+    // อัพเดททุก 1 วินาที
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [room?.gameStarted, room?.gameEnded, room?.gameEndTime]);
 
   const createRoom = () => {
     if (!socket || !playerName) return;
@@ -192,6 +215,23 @@ export default function GameBoard() {
     setSelectedCard(null);
   };
 
+  const removeCard = (cardIndex: number) => {
+    if (!socket || !room || !room.currentBattle) return;
+    
+    const myPlayer = room.players.find(p => p.id === myPlayerId);
+    if (!myPlayer) return;
+    
+    const isMyTurn = room.currentBattle.player1Id === myPlayerId || 
+                     room.currentBattle.player2Id === myPlayerId;
+    
+    if (!isMyTurn) {
+      setError('ยังไม่ถึงตาคุณ');
+      return;
+    }
+    
+    socket.emit('remove-card', { roomId: room.id, cardIndex });
+  };
+
   const revealCard = () => {
     if (!socket || !room || !room.currentBattle) return;
     socket.emit('reveal-cards', room.id);
@@ -216,8 +256,35 @@ export default function GameBoard() {
     setShowSpecialCardDialog(true);
   };
 
+  // หาคู่ battle ของเรา
+  const getBattleOpponent = () => {
+    if (!room?.currentBattle || !myPlayerId) return null;
+    
+    const opponentId = room.currentBattle.player1Id === myPlayerId 
+      ? room.currentBattle.player2Id 
+      : room.currentBattle.player2Id === myPlayerId 
+        ? room.currentBattle.player1Id 
+        : null;
+    
+    if (!opponentId) return null;
+    return room.players.find(p => p.id === opponentId) || null;
+  };
+
+  // เช็คว่าอยู่ใน battle หรือไม่
+  const isInBattle = () => {
+    if (!room?.currentBattle || !myPlayerId) return false;
+    return room.currentBattle.player1Id === myPlayerId || room.currentBattle.player2Id === myPlayerId;
+  };
+
+  // แปลงเวลาเป็นรูปแบบ MM:SS
+  const formatTime = (milliseconds: number) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   const myPlayer = room?.players.find(p => p.id === myPlayerId);
-  const stats = room ? countPlayersByStatus(room.players) : { humans: 0, zombies: 0, eliminated: 0 };
 
   // Lobby view
   if (!room) {
@@ -343,18 +410,21 @@ export default function GameBoard() {
             </Typography>
           </Box>
           
-          <Stack direction="row" spacing={2}>
-            <Chip
-              icon={<Person />}
-              label={`มนุษย์: ${stats.humans}`}
-              color="primary"
-            />
-            <Chip
-              icon={<Coronavirus />}
-              label={`ซอมบี้: ${stats.zombies}`}
-              color="success"
-            />
-          </Stack>
+          {/* แสดงเวลาถอยหลังแทนจำนวนมนุษย์/ซอมบี้ */}
+          {room.gameStarted && !room.gameEnded && timeRemaining !== null && (
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ 
+                color: timeRemaining < 60000 ? '#e74c3c' : '#2ecc71',
+                fontWeight: 'bold',
+                fontFamily: 'monospace'
+              }}>
+                ⏱️ {formatTime(timeRemaining)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                เวลาที่เหลือ
+              </Typography>
+            </Box>
+          )}
           
           <Box>
             {!room.gameStarted && myPlayer && !myPlayer.isReady && (
@@ -392,7 +462,7 @@ export default function GameBoard() {
       {room.currentBattle && (room.currentBattle.player1Id === myPlayerId || room.currentBattle.player2Id === myPlayerId) && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           <Typography variant="body1">
-            ⚔️ <strong>คลิกที่ไพ่ของคุณ 3 ใบ</strong> เพื่อวางลงในกระดาน
+            ⚔️ <strong>คลิกที่ไพ่ของคุณ 1-3 ใบ</strong> เพื่อวางลงในกระดาน (ขั้นต่ำ 1 ใบ)
           </Typography>
         </Alert>
       )}
@@ -431,6 +501,13 @@ export default function GameBoard() {
                     card={room.currentBattle!.player1Cards?.[index]}
                     isRevealed={room.currentBattle!.player1CardsRevealed?.[index] || false}
                     isMyCard={room.currentBattle!.player1Id === myPlayerId}
+                    onClick={
+                      room.currentBattle!.player1Id === myPlayerId &&
+                      room.currentBattle!.player1Cards?.[index] &&
+                      !(room.currentBattle!.player1CardsRevealed?.[index])
+                        ? () => removeCard(index)
+                        : undefined
+                    }
                   />
                 ))}
               </Box>
@@ -438,7 +515,7 @@ export default function GameBoard() {
                 วางแล้ว: {room.currentBattle.player1Cards?.length || 0}/3
               </Typography>
               {room.currentBattle.player1Id === myPlayerId && 
-               (room.currentBattle.player1Cards?.length || 0) === 3 && 
+               (room.currentBattle.player1Cards?.length || 0) >= 1 && 
                !(room.currentBattle.player1CardsRevealed?.every(r => r)) && (
                 <Button
                   variant="contained"
@@ -468,6 +545,13 @@ export default function GameBoard() {
                     card={room.currentBattle!.player2Cards?.[index]}
                     isRevealed={room.currentBattle!.player2CardsRevealed?.[index] || false}
                     isMyCard={room.currentBattle!.player2Id === myPlayerId}
+                    onClick={
+                      room.currentBattle!.player2Id === myPlayerId &&
+                      room.currentBattle!.player2Cards?.[index] &&
+                      !(room.currentBattle!.player2CardsRevealed?.[index])
+                        ? () => removeCard(index)
+                        : undefined
+                    }
                   />
                 ))}
               </Box>
@@ -475,7 +559,7 @@ export default function GameBoard() {
                 วางแล้ว: {room.currentBattle.player2Cards?.length || 0}/3
               </Typography>
               {room.currentBattle.player2Id === myPlayerId && 
-               (room.currentBattle.player2Cards?.length || 0) === 3 && 
+               (room.currentBattle.player2Cards?.length || 0) >= 1 && 
                !(room.currentBattle.player2CardsRevealed?.every(r => r)) && (
                 <Button
                   variant="contained"
@@ -492,14 +576,14 @@ export default function GameBoard() {
           
           {/* Battle Status */}
           <Box sx={{ textAlign: 'center', mt: 2 }}>
-            {(room.currentBattle.player1Cards?.length || 0) < 3 || (room.currentBattle.player2Cards?.length || 0) < 3 ? (
+            {(room.currentBattle.player1Cards?.length || 0) < 1 || (room.currentBattle.player2Cards?.length || 0) < 1 ? (
               <Alert severity="info">
                 {room.currentBattle.player1Id === myPlayerId || room.currentBattle.player2Id === myPlayerId
-                  ? `เลือกไพ่ ${3 - (room.currentBattle.player1Id === myPlayerId ? (room.currentBattle.player1Cards?.length || 0) : (room.currentBattle.player2Cards?.length || 0))} ใบจากมือของคุณ`
+                  ? `เลือกไพ่ 1-3 ใบจากมือของคุณ (ขั้นต่ำ 1 ใบ)`
                   : 'รอผู้เล่นวางไพ่...'}
               </Alert>
             ) : !(room.currentBattle.player1CardsRevealed?.every(r => r)) || !(room.currentBattle.player2CardsRevealed?.every(r => r)) ? (
-              <Alert severity="warning">ทั้งสองฝ่ายวางไพ่ครบแล้ว! คลิกปุ่ม &quot;เปิดไพ่ทั้งหมด&quot; เพื่อเปิดไพ่</Alert>
+              <Alert severity="warning">ทั้งสองฝ่ายวางไพ่แล้ว! คลิกปุ่ม &quot;เปิดไพ่ทั้งหมด&quot; เพื่อเปิดไพ่</Alert>
             ) : (
               <Alert severity="success">กำลังตัดสินผล...</Alert>
             )}
@@ -591,7 +675,15 @@ export default function GameBoard() {
                       if (room.currentBattle) {
                         playCard(card);
                       }
-                    } else {
+                    } else if (card.type === CardType.SHOTGUN) {
+                      // ปืนใช้ได้เฉพาะใน battle
+                      if (isInBattle()) {
+                        openSpecialCardDialog(card.type);
+                      } else {
+                        setError('ใช้ไพ่ปืนได้เฉพาะตอนอยู่ใน battle เท่านั้น');
+                      }
+                    } else if (card.type === CardType.VACCINE) {
+                      // วัคซีนใช้ได้เสมอ แต่ใน battle จะแสดงเฉพาะตัวเองกับคู่ battle
                       openSpecialCardDialog(card.type);
                     }
                   }}
@@ -631,9 +723,25 @@ export default function GameBoard() {
               : 'เลือกผู้เล่นที่ต้องการรักษา:'}
           </Typography>
           <Stack spacing={1}>
-            {room.players
-              .filter(p => p.id !== myPlayerId && p.status !== PlayerStatus.ELIMINATED)
-              .map(player => (
+            {(() => {
+              const battleOpponent = getBattleOpponent();
+              let availablePlayers: Player[] = [];
+
+              if (specialCardType === CardType.SHOTGUN) {
+                // ไพ่ปืน: แสดงเฉพาะคู่ battle ตรงข้าม
+                if (battleOpponent) {
+                  availablePlayers = [battleOpponent];
+                }
+              } else if (specialCardType === CardType.VACCINE) {
+                // ไพ่วัคซีน: ถ้าอยู่ใน battle แสดงตัวเองกับคู่ battle, ถ้าไม่อยู่ใน battle แสดงทุกคน
+                if (isInBattle() && battleOpponent && myPlayer) {
+                  availablePlayers = [myPlayer, battleOpponent];
+                } else {
+                  availablePlayers = room.players.filter(p => p.status !== PlayerStatus.ELIMINATED);
+                }
+              }
+
+              return availablePlayers.map(player => (
                 <Button
                   key={player.id}
                   variant={selectedTarget?.id === player.id ? 'contained' : 'outlined'}
@@ -643,12 +751,15 @@ export default function GameBoard() {
                   {player.name}
                   {player.id === myPlayerId && ' (คุณ)'}
                 </Button>
-              ))}
+              ));
+            })()}
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
             {specialCardType === CardType.SHOTGUN 
-              ? 'หมายเหตุ: ถ้ายิงผิดคนอาจจะเสียไพ่เปล่าๆ'
-              : 'หมายเหตุ: วัคซีนใช้ได้เฉพาะคนที่เป็นซอมบี้'}
+              ? 'หมายเหตุ: ปืนใช้ได้เฉพาะกับคู่ battle ตรงข้าม'
+              : isInBattle() 
+                ? 'หมายเหตุ: วัคซีนใช้ได้กับตัวเองหรือคู่ battle ที่มีไพ่ซอมบี้'
+                : 'หมายเหตุ: วัคซีนใช้ได้กับผู้เล่นที่มีไพ่ซอมบี้'}
           </Typography>
         </DialogContent>
         <DialogActions>

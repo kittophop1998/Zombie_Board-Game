@@ -96,8 +96,9 @@ export function distributeSpecialCards(players: Player[]): Player[] {
 export function calculateCardValue(card: Card | undefined): number {
   if (!card) return 0;
   
-  if (card.type === CardType.ZOMBIE) {
-    return 999; // ไพ่ซอมบี้ชนะทุกอย่าง
+  // ไพ่พิเศษไม่นับคะแนน
+  if (card.type === CardType.ZOMBIE || card.type === CardType.SHOTGUN || card.type === CardType.VACCINE) {
+    return 0;
   }
   
   if (card.type === CardType.NUMBER && card.value) {

@@ -60,6 +60,8 @@ export interface GameRoom {
   gameStarted: boolean;
   gameEnded: boolean;
   winningTeam?: 'HUMAN' | 'ZOMBIE';
+  gameStartTime?: number; // เวลาเริ่มเกม (timestamp)
+  gameEndTime?: number; // เวลาที่เกมจะจบ (timestamp)
 }
 
 // สถานะเกมสำหรับ Client
