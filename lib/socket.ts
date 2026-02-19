@@ -139,10 +139,10 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         currentSocketId: socket.id
       });
 
-      // เช็คว่าวางครบ 4 ใบหรือยัง (กติกาใหม่: ได้ไม่เกิน 4 ใบ รวมไพ่พิเศษ)
+      // เช็คว่าวางครบ 3 ใบหรือยัง (กติกาใหม่: ได้ไม่เกิน 3 ใบ รวมไพ่พิเศษ)
       const myCards = battle.player1Id === socket.id ? battle.player1Cards : battle.player2Cards;
-      if (myCards.length >= 4) {
-        socket.emit('error', { message: 'วางไพ่ได้สูงสุด 4 ใบ (รวมไพ่พิเศษ)' });
+      if (myCards.length >= 3) {
+        socket.emit('error', { message: 'วางไพ่ได้สูงสุด 3 ใบ (รวมไพ่พิเศษ)' });
         return;
       }
 
@@ -181,8 +181,10 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         return;
       }
 
-      // ลบไพ่ออกจากมือผู้เล่น
-      player.cards.splice(cardIndex, 1);
+      // ลบไพ่ออกจากมือผู้เล่น (ยกเว้นไพ่ซอมบี้ที่จะคืนกลับหลังจบ battle)
+      if (card.type !== CardType.ZOMBIE) {
+        player.cards.splice(cardIndex, 1);
+      }
 
       // อัพเดท currentBattle เพื่อ backward compatibility
       room.currentBattle = battle;
@@ -197,7 +199,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       // หา index ปัจจุบันหลัง push แล้ว
       const currentCards = battle.player1Id === socket.id ? battle.player1Cards : battle.player2Cards;
       io.to(data.roomId).emit('message', { 
-        message: `${player.name} วางไพ่ ${currentCards.length}/4` 
+        message: `${player.name} วางไพ่ ${currentCards.length}/3` 
       });
     });
 
@@ -242,18 +244,18 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         battle.player2CardsRevealed.splice(data.cardIndex, 1);
       }
 
-      // คืนไพ่กลับให้ผู้เล่น
-      if (removedCard) {
+      // คืนไพ่กลับให้ผู้เล่น (เฉพาะไพ่ที่ไม่ใช่ซอมบี้ เพราะไพ่ซอมบี้ไม่ได้ถูกลบออกจากมือ)
+      if (removedCard && removedCard.type !== CardType.ZOMBIE) {
         player.cards.push(removedCard);
-        
-        // อัพเดท currentBattle
-        room.currentBattle = battle;
-        
-        io.to(data.roomId).emit('room-updated', room);
-        io.to(data.roomId).emit('message', { 
-          message: `${player.name} ดึงไพ่กลับ` 
-        });
       }
+      
+      // อัพเดท currentBattle
+      room.currentBattle = battle;
+      
+      io.to(data.roomId).emit('room-updated', room);
+      io.to(data.roomId).emit('message', { 
+        message: `${player.name} ดึงไพ่กลับ` 
+      });
     });
 
     // เปิดไพ่
@@ -506,7 +508,7 @@ function startGame(roomId: string, io: SocketServer) {
   // ตั้งเวลาเริ่มเกมและเวลาจบ (5 นาที)
   const now = Date.now();
   room.gameStartTime = now;
-  room.gameEndTime = now + (5 * 60 * 1000); // 5 นาที
+  room.gameEndTime = now + (15 * 60 * 1000); // 15 นาที
   
   io.to(roomId).emit('game-started', room);
   io.to(roomId).emit('room-updated', room);
@@ -605,23 +607,7 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
     }
   }
   
-  // กรณีคืนไพ่ซอมบี้กลับ
-  if (result.zombieCardReturned && result.zombiePlayerId) {
-    const zombiePlayer = room.players.find(p => p.id === result.zombiePlayerId);
-    if (zombiePlayer) {
-      // หาไพ่ซอมบี้จาก battle cards
-      const zombieCards = result.zombiePlayerId === player1.id ? battle.player1Cards : battle.player2Cards;
-      const zombieCard = zombieCards.find(c => c.type === CardType.ZOMBIE);
-      
-      if (zombieCard) {
-        // คืนไพ่ซอมบี้กลับให้ผู้เล่น
-        zombiePlayer.cards.push(zombieCard);
-        io.to(room.id).emit('message', { 
-          message: `${zombiePlayer.name} ได้ไพ่ซอมบี้กลับคืน` 
-        });
-      }
-    }
-  }
+  // หมายเหตุ: ไพ่ซอมบี้ไม่ต้องคืนกลับเพราะไม่ได้ถูกลบออกจากมือตั้งแต่แรก (result.zombieCardReturned)
   
   // ผู้ชนะได้รับไพ่ตัวเลขหนึ่งใบจากไพ่ที่ผู้แพ้วางลงในกระดาน battle
   if (winnerId) {
