@@ -155,9 +155,12 @@ export function determineBattleWinner(
   zombiePlayerId?: string; // ผู้เล่นที่แพร่เชื้อ
   zombieCardReturned?: boolean; // true ถ้าไพ่ซอมบี้ถูกคืนกลับ
   eliminatedPlayerId?: string; // ผู้เล่นที่ถูกกำจัด (ยิงตาย)
-  shotgunAction?: 'stolen' | 'kill_opponent' | 'kill_self'; // การกระทำของปืน
+  shotgunAction?: 'stolen' | 'kill_opponent' | 'kill_self' | 'pending_choice'; // การกระทำของปืน
   shotgunOwnerId?: string; // เจ้าของปืนใหม่ (กรณียึดปืน)
   zombieRevealed?: boolean; // true ถ้าซอมบี้ถูกเปิดเผยตัวตน
+  needsPlayerChoice?: boolean; // true ถ้าต้องรอผู้เล่นเลือก
+  chooserId?: string; // ผู้เล่นที่ต้องเลือก
+  loserId?: string; // ผู้เล่นที่แพ้
 } {
   if (cards1.length === 0 || cards2.length === 0) {
     return { winnerId: null, isInfection: false };
@@ -187,13 +190,15 @@ export function determineBattleWinner(
       };
     }
     // 2.1.2 แต้มของคนใช้ปืนน้อยกว่า -> ฝั่งตรงข้ามเลือกได้ (ยึดปืนหรือยิงกลับ)
-    // *** ส่วนนี้ต้องให้ผู้เล่นเลือกที่ client side แล้วส่งมาอีกครั้ง ***
+    // *** ผู้เล่นต้องเลือก: 1) ยึดปืนมาใช้เอง หรือ 2) ยิงฝั่งตรงข้ามให้ตาย ***
     else if (total1 < total2) {
       return {
         winnerId: player2.id,
         isInfection: false,
-        shotgunAction: 'stolen', // ผู้เล่น 2 สามารถเลือกได้
-        shotgunOwnerId: player2.id
+        shotgunAction: 'pending_choice', // รอการเลือกจากผู้เล่น
+        needsPlayerChoice: true,
+        chooserId: player2.id,
+        loserId: player1.id
       };
     }
     // เสมอ
@@ -216,8 +221,10 @@ export function determineBattleWinner(
       return {
         winnerId: player1.id,
         isInfection: false,
-        shotgunAction: 'stolen',
-        shotgunOwnerId: player1.id
+        shotgunAction: 'pending_choice',
+        needsPlayerChoice: true,
+        chooserId: player1.id,
+        loserId: player2.id
       };
     }
     // เสมอ

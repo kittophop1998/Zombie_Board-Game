@@ -50,6 +50,11 @@ export interface Battle {
   player2CardsRevealed: boolean[];
   winnerId?: string;
   isComplete: boolean;
+  pendingShotgunChoice?: {
+    chooserId: string; // ผู้เล่นที่ต้องเลือก
+    loserId: string; // ผู้เล่นที่แพ้และถูกยึดปืน
+    shotgunCard: Card; // ไพ่ปืนที่จะถูกยึด
+  };
 }
 
 // ห้องเกม

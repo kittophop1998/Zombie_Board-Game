@@ -462,6 +462,99 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       });
     });
 
+    // ผู้เล่นเลือกการกระทำเมื่อยึดปืนได้ (ยึดปืนหรือยิงฝั่งตรงข้าม)
+    socket.on('choose-shotgun-action', (data: { 
+      roomId: string; 
+      battleId: string; 
+      action: 'steal' | 'kill_opponent' 
+    }) => {
+      const room = rooms.get(data.roomId);
+      if (!room) return;
+
+      const battle = room.battles.find(b => b.id === data.battleId);
+      if (!battle || !battle.pendingShotgunChoice) {
+        socket.emit('error', { message: 'ไม่พบการเลือกที่รอดำเนินการ' });
+        return;
+      }
+
+      // ตรวจสอบว่าเป็นผู้เล่นที่ต้องเลือกหรือไม่
+      if (battle.pendingShotgunChoice.chooserId !== socket.id) {
+        socket.emit('error', { message: 'คุณไม่มีสิทธิ์เลือก' });
+        return;
+      }
+
+      const chooser = room.players.find(p => p.id === battle.pendingShotgunChoice!.chooserId);
+      const loser = room.players.find(p => p.id === battle.pendingShotgunChoice!.loserId);
+      const shotgunCard = battle.pendingShotgunChoice.shotgunCard;
+
+      if (!chooser || !loser) return;
+
+      if (data.action === 'steal') {
+        // ยึดปืนมาใช้เอง
+        const currentShotguns = chooser.cards.filter(c => c.type === CardType.SHOTGUN).length;
+        if (currentShotguns < 3) {
+          chooser.cards.push(shotgunCard);
+          io.to(room.id).emit('message', { 
+            message: `${chooser.name} ยึดปืนจาก ${loser.name}!` 
+          });
+        } else {
+          io.to(room.id).emit('message', { 
+            message: `${chooser.name} มีปืนเต็มแล้ว ไม่สามารถยึดได้!` 
+          });
+        }
+      } else if (data.action === 'kill_opponent') {
+        // ใช้ปืนยิงฝั่งตรงข้ามให้ตาย
+        loser.status = PlayerStatus.ELIMINATED;
+        loser.cards = [];
+        io.to(room.id).emit('message', { 
+          message: `${chooser.name} ใช้ปืนของ ${loser.name} ยิง ${loser.name} ตาย!` 
+        });
+      }
+
+      // ลบสถานะรอการเลือก
+      battle.pendingShotgunChoice = undefined;
+      
+      // จบ battle และผู้ชนะได้ไพ่จากกระดาน
+      battle.isComplete = true;
+      
+      // ผู้ชนะได้รับไพ่ตัวเลขหนึ่งใบจากไพ่ที่ผู้แพ้วางลงในกระดาน battle
+      const loserBattleCards = battle.player1Id === loser.id ? battle.player1Cards : battle.player2Cards;
+      const loserNumberCardsInBattle = loserBattleCards.filter(c => c.type === CardType.NUMBER);
+      if (loserNumberCardsInBattle.length > 0) {
+        const randomIndex = Math.floor(Math.random() * loserNumberCardsInBattle.length);
+        const stolenCard = loserNumberCardsInBattle[randomIndex];
+        
+        // เพิ่มไพ่ให้ผู้ชนะ
+        chooser.cards.push(stolenCard);
+        
+        io.to(room.id).emit('message', { 
+          message: `${chooser.name} ได้ไพ่ตัวเลข ${stolenCard.value} จากกระดาน battle!` 
+        });
+      }
+      
+      // ลบ battle ที่จบแล้วออกจาก battles array
+      const battleIndex = room.battles.findIndex(b => b.id === battle.id);
+      if (battleIndex !== -1) {
+        room.battles.splice(battleIndex, 1);
+      }
+      
+      // ถ้าเป็น battle สุดท้าย ให้ลบ currentBattle ด้วย
+      if (room.battles.length === 0) {
+        room.currentBattle = undefined;
+      } else {
+        // อัพเดท currentBattle ให้เป็น battle ที่ยังไม่จบ
+        room.currentBattle = room.battles.find(b => !b.isComplete);
+      }
+
+      io.to(data.roomId).emit('room-updated', room);
+
+      // ตรวจสอบว่าเกมจบหรือไม่
+      const gameEnd = checkGameEnd(room.players);
+      if (gameEnd.isEnded) {
+        endGame(room, gameEnd.winner!, gameEnd.reason!, io);
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id);
       
@@ -543,6 +636,38 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
   const total1 = calculateTotalValue(battle.player1Cards);
   const total2 = calculateTotalValue(battle.player2Cards);
   
+  // === กรณีที่ต้องรอผู้เล่นเลือก (ยึดปืนหรือยิงฝั่งตรงข้าม) ===
+  if (result.needsPlayerChoice && result.chooserId && result.loserId) {
+    const loserBattleCards = result.loserId === player1.id ? battle.player1Cards : battle.player2Cards;
+    const shotgunCard = loserBattleCards.find(c => c.type === CardType.SHOTGUN);
+    
+    if (shotgunCard) {
+      battle.pendingShotgunChoice = {
+        chooserId: result.chooserId,
+        loserId: result.loserId,
+        shotgunCard: shotgunCard
+      };
+      
+      const chooser = room.players.find(p => p.id === result.chooserId);
+      const loser = room.players.find(p => p.id === result.loserId);
+      
+      io.to(room.id).emit('message', { 
+        message: `${winnerId === player1.id ? player1.name : player2.name} ชนะ! (${total1} vs ${total2})` 
+      });
+      
+      io.to(room.id).emit('room-updated', room);
+      io.to(room.id).emit('shotgun-choice-required', {
+        battleId: battle.id,
+        chooserId: result.chooserId,
+        chooserName: chooser?.name,
+        loserId: result.loserId,
+        loserName: loser?.name
+      });
+      
+      return; // รอการเลือกจากผู้เล่น
+    }
+  }
+  
   // === จัดการกรณีพิเศษต่างๆ ===
   
   // กรณีมีการกำจัด (ยิงตาย)
@@ -554,29 +679,6 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
       io.to(room.id).emit('message', { 
         message: `${eliminated.name} ถูกยิงตาย!` 
       });
-    }
-  }
-  
-  // กรณีมีการยึดปืน (shotgunAction === 'stolen')
-  if (result.shotgunAction === 'stolen' && result.shotgunOwnerId) {
-    const newOwner = room.players.find(p => p.id === result.shotgunOwnerId);
-    const loser = winnerId === player1.id ? player2 : player1;
-    
-    if (newOwner && loser) {
-      // หาไพ่ปืนจาก battle cards
-      const loserCards = winnerId === player1.id ? battle.player2Cards : battle.player1Cards;
-      const shotgunCard = loserCards.find(c => c.type === CardType.SHOTGUN);
-      
-      if (shotgunCard) {
-        // ตรวจสอบว่าเก็บปืนได้สูงสุด 3 ใบ
-        const currentShotguns = newOwner.cards.filter(c => c.type === CardType.SHOTGUN).length;
-        if (currentShotguns < 3) {
-          newOwner.cards.push(shotgunCard);
-          io.to(room.id).emit('message', { 
-            message: `${newOwner.name} ยึดปืนจาก ${loser.name}!` 
-          });
-        }
-      }
     }
   }
   
@@ -651,28 +753,33 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
     });
   }
   
-  battle.isComplete = true;
-  
-  // ลบ battle ที่จบแล้วออกจาก battles array
-  const battleIndex = room.battles.findIndex(b => b.id === battle.id);
-  if (battleIndex !== -1) {
-    room.battles.splice(battleIndex, 1);
-  }
-  
-  // ถ้าเป็น battle สุดท้าย ให้ลบ currentBattle ด้วย
-  if (room.battles.length === 0) {
-    room.currentBattle = undefined;
-  } else {
-    // อัพเดท currentBattle ให้เป็น battle ที่ยังไม่จบ
-    room.currentBattle = room.battles.find(b => !b.isComplete);
+  // จบ battle เฉพาะเมื่อไม่มี pending choice
+  if (!battle.pendingShotgunChoice) {
+    battle.isComplete = true;
+    
+    // ลบ battle ที่จบแล้วออกจาก battles array
+    const battleIndex = room.battles.findIndex(b => b.id === battle.id);
+    if (battleIndex !== -1) {
+      room.battles.splice(battleIndex, 1);
+    }
+    
+    // ถ้าเป็น battle สุดท้าย ให้ลบ currentBattle ด้วย
+    if (room.battles.length === 0) {
+      room.currentBattle = undefined;
+    } else {
+      // อัพเดท currentBattle ให้เป็น battle ที่ยังไม่จบ
+      room.currentBattle = room.battles.find(b => !b.isComplete);
+    }
   }
   
   io.to(room.id).emit('room-updated', room);
   
-  // ตรวจสอบว่าเกมจบหรือไม่
-  const gameEnd = checkGameEnd(room.players);
-  if (gameEnd.isEnded) {
-    endGame(room, gameEnd.winner!, gameEnd.reason!, io);
+  // ตรวจสอบว่าเกมจบหรือไม่ (เฉพาะเมื่อไม่มี pending choice)
+  if (!battle.pendingShotgunChoice) {
+    const gameEnd = checkGameEnd(room.players);
+    if (gameEnd.isEnded) {
+      endGame(room, gameEnd.winner!, gameEnd.reason!, io);
+    }
   }
 }
 

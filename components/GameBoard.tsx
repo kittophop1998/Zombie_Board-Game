@@ -37,6 +37,7 @@ import {
 import CardComponent from './CardComponent';
 import PlayerCard from './PlayerCard';
 import BattleCard from './BattleCard';
+import ShotgunChoiceModal from './ShotgunChoiceModal';
 
 let socket: Socket | null = null;
 
@@ -62,6 +63,16 @@ export default function GameBoard() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  
+  // Shotgun choice states
+  const [showShotgunChoice, setShowShotgunChoice] = useState(false);
+  const [shotgunChoiceData, setShotgunChoiceData] = useState<{
+    battleId: string;
+    chooserId: string;
+    chooserName: string;
+    loserId: string;
+    loserName: string;
+  } | null>(null);
 
   const initSocket = useCallback(async () => {
     await fetch('/api/socket');
@@ -108,6 +119,18 @@ export default function GameBoard() {
 
     socket.on('error', (data: { message: string }) => {
       setError(data.message);
+    });
+
+    socket.on('shotgun-choice-required', (data: {
+      battleId: string;
+      chooserId: string;
+      chooserName: string;
+      loserId: string;
+      loserName: string;
+    }) => {
+      console.log('shotgun-choice-required received:', data);
+      setShotgunChoiceData(data);
+      setShowShotgunChoice(true);
     });
   }, []);
 
@@ -254,6 +277,20 @@ export default function GameBoard() {
   const openSpecialCardDialog = (cardType: CardType) => {
     setSpecialCardType(cardType);
     setShowSpecialCardDialog(true);
+  };
+
+  const handleShotgunChoice = (battleId: string, action: 'steal' | 'kill_opponent') => {
+    if (!socket || !room) return;
+    
+    console.log('Sending shotgun choice:', { roomId: room.id, battleId, action });
+    socket.emit('choose-shotgun-action', { 
+      roomId: room.id, 
+      battleId, 
+      action 
+    });
+    
+    setShowShotgunChoice(false);
+    setShotgunChoiceData(null);
   };
 
   // หาคู่ battle ของเรา
@@ -790,6 +827,15 @@ export default function GameBoard() {
       >
         <Alert severity="error">{error}</Alert>
       </Snackbar>
+
+      {/* Shotgun Choice Modal */}
+      <ShotgunChoiceModal
+        isOpen={showShotgunChoice && shotgunChoiceData?.chooserId === myPlayerId}
+        battleId={shotgunChoiceData?.battleId || ''}
+        chooserName={shotgunChoiceData?.chooserName || ''}
+        loserName={shotgunChoiceData?.loserName || ''}
+        onChoose={handleShotgunChoice}
+      />
     </Container>
   );
 }
