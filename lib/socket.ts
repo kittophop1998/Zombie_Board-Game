@@ -181,10 +181,8 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         return;
       }
 
-      // ลบไพ่ออกจากมือผู้เล่น (ยกเว้นไพ่ซอมบี้ที่จะคืนกลับหลังจบ battle)
-      if (card.type !== CardType.ZOMBIE) {
-        player.cards.splice(cardIndex, 1);
-      }
+      // ลบไพ่ออกจากมือผู้เล่น (ทุกประเภทรวมไพ่พิเศษ)
+      player.cards.splice(cardIndex, 1);
 
       // อัพเดท currentBattle เพื่อ backward compatibility
       room.currentBattle = battle;
@@ -244,8 +242,8 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         battle.player2CardsRevealed.splice(data.cardIndex, 1);
       }
 
-      // คืนไพ่กลับให้ผู้เล่น (เฉพาะไพ่ที่ไม่ใช่ซอมบี้ เพราะไพ่ซอมบี้ไม่ได้ถูกลบออกจากมือ)
-      if (removedCard && removedCard.type !== CardType.ZOMBIE) {
+      // คืนไพ่กลับให้ผู้เล่น (ทุกประเภทรวมไพ่พิเศษ)
+      if (removedCard) {
         player.cards.push(removedCard);
       }
       
@@ -427,15 +425,15 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       if (!player || !opponent) return;
       if (player.status === PlayerStatus.ELIMINATED || opponent.status === PlayerStatus.ELIMINATED) return;
 
-      // เช็คว่าผู้เล่นคนนี้กำลังอยู่ใน battle อื่นหรือไม่
-      const existingBattle = room.battles.find(b => 
-        (b.player1Id === socket.id || b.player2Id === socket.id || 
-         b.player1Id === data.opponentId || b.player2Id === data.opponentId) && 
+      // เช็คว่าผู้เล่นคนนี้กำลังอยู่ใน battle กับคนนี้อยู่แล้วหรือไม่
+      const existingBattleWithSameOpponent = room.battles.find(b => 
+        ((b.player1Id === socket.id && b.player2Id === data.opponentId) ||
+         (b.player2Id === socket.id && b.player1Id === data.opponentId)) && 
         !b.isComplete
       );
 
-      if (existingBattle) {
-        socket.emit('error', { message: 'คุณหรือคู่ต่อสู้กำลังอยู่ใน battle อยู่แล้ว' });
+      if (existingBattleWithSameOpponent) {
+        socket.emit('error', { message: 'คุณกำลัง battle กับคนนี้อยู่แล้ว' });
         return;
       }
 
@@ -607,7 +605,23 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
     }
   }
   
-  // หมายเหตุ: ไพ่ซอมบี้ไม่ต้องคืนกลับเพราะไม่ได้ถูกลบออกจากมือตั้งแต่แรก (result.zombieCardReturned)
+  // กรณีคืนไพ่ซอมบี้กลับ (เมื่อซอมบี้ใช้ไพ่ซอมบี้ใน battle)
+  if (result.zombieCardReturned && result.zombiePlayerId) {
+    const zombiePlayer = room.players.find(p => p.id === result.zombiePlayerId);
+    if (zombiePlayer) {
+      // หาไพ่ซอมบี้จาก battle cards
+      const zombieCards = result.zombiePlayerId === player1.id ? battle.player1Cards : battle.player2Cards;
+      const zombieCard = zombieCards.find(c => c.type === CardType.ZOMBIE);
+      
+      if (zombieCard) {
+        // คืนไพ่ซอมบี้กลับให้ผู้เล่น
+        zombiePlayer.cards.push(zombieCard);
+        io.to(room.id).emit('message', { 
+          message: `${zombiePlayer.name} ได้ไพ่ซอมบี้กลับคืน` 
+        });
+      }
+    }
+  }
   
   // ผู้ชนะได้รับไพ่ตัวเลขหนึ่งใบจากไพ่ที่ผู้แพ้วางลงในกระดาน battle
   if (winnerId) {
