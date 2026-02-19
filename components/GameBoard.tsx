@@ -261,11 +261,10 @@ export default function GameBoard() {
   };
 
   const useSpecialCard = () => {
-    if (!socket || !room || !specialCardType || !selectedTarget) return;
+    if (!socket || !room || !selectedTarget) return;
     
-    if (specialCardType === CardType.SHOTGUN) {
-      socket.emit('use-shotgun', { roomId: room.id, targetPlayerId: selectedTarget.id });
-    } else if (specialCardType === CardType.VACCINE) {
+    // เฉพาะวัคซีนเท่านั้น (ปืนไม่ได้ใช้ผ่าน dialog แล้ว)
+    if (specialCardType === CardType.VACCINE) {
       socket.emit('use-vaccine', { roomId: room.id, targetPlayerId: selectedTarget.id });
     }
     
@@ -709,18 +708,19 @@ export default function GameBoard() {
                   card={card}
                   onClick={() => {
                     if (card.type === CardType.ZOMBIE) {
+                      // ไพ่ซอมบี้: วางลงใน battle
                       if (room.currentBattle) {
                         playCard(card);
                       }
                     } else if (card.type === CardType.SHOTGUN) {
-                      // ปืนใช้ได้เฉพาะใน battle
-                      if (isInBattle()) {
-                        openSpecialCardDialog(card.type);
+                      // ไพ่ปืน: วางลงใน battle เหมือนไพ่ปกติ
+                      if (room.currentBattle) {
+                        playCard(card);
                       } else {
                         setError('ใช้ไพ่ปืนได้เฉพาะตอนอยู่ใน battle เท่านั้น');
                       }
                     } else if (card.type === CardType.VACCINE) {
-                      // วัคซีนใช้ได้เสมอ แต่ใน battle จะแสดงเฉพาะตัวเองกับคู่ battle
+                      // วัคซีน: ใช้ได้เสมอผ่าน dialog
                       openSpecialCardDialog(card.type);
                     }
                   }}
@@ -748,34 +748,29 @@ export default function GameBoard() {
         </DialogActions>
       </Dialog>
 
-      {/* Special Card Dialog */}
+      {/* Special Card Dialog - เฉพาะวัคซีน */}
       <Dialog open={showSpecialCardDialog} onClose={() => setShowSpecialCardDialog(false)}>
         <DialogTitle>
-          ใช้ไพ่{specialCardType === CardType.SHOTGUN ? 'ปืนลูกซอง' : 'วัคซีน'}
+          ใช้ไพ่วัคซีน
         </DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
-            {specialCardType === CardType.SHOTGUN 
-              ? 'เลือกผู้เล่นที่คุณคิดว่าเป็นซอมบี้:'
-              : 'เลือกผู้เล่นที่ต้องการรักษา:'}
+            เลือกผู้เล่นที่ต้องการรักษา (ไม่สามารถใช้กับตัวเองได้):
           </Typography>
           <Stack spacing={1}>
             {(() => {
               const battleOpponent = getBattleOpponent();
               let availablePlayers: Player[] = [];
 
-              if (specialCardType === CardType.SHOTGUN) {
-                // ไพ่ปืน: แสดงเฉพาะคู่ battle ตรงข้าม
-                if (battleOpponent) {
-                  availablePlayers = [battleOpponent];
-                }
-              } else if (specialCardType === CardType.VACCINE) {
-                // ไพ่วัคซีน: ถ้าอยู่ใน battle แสดงตัวเองกับคู่ battle, ถ้าไม่อยู่ใน battle แสดงทุกคน
-                if (isInBattle() && battleOpponent && myPlayer) {
-                  availablePlayers = [myPlayer, battleOpponent];
-                } else {
-                  availablePlayers = room.players.filter(p => p.status !== PlayerStatus.ELIMINATED);
-                }
+              // ไพ่วัคซีน: ห้ามใช้กับตัวเอง (ตามกติกา)
+              if (isInBattle() && battleOpponent) {
+                // ถ้าอยู่ใน battle แสดงเฉพาะคู่ battle
+                availablePlayers = [battleOpponent];
+              } else {
+                // ถ้าไม่อยู่ใน battle แสดงทุกคนยกเว้นตัวเอง
+                availablePlayers = room.players.filter(p => 
+                  p.status !== PlayerStatus.ELIMINATED && p.id !== myPlayerId
+                );
               }
 
               return availablePlayers.map(player => (
@@ -786,17 +781,14 @@ export default function GameBoard() {
                   fullWidth
                 >
                   {player.name}
-                  {player.id === myPlayerId && ' (คุณ)'}
                 </Button>
               ));
             })()}
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-            {specialCardType === CardType.SHOTGUN 
-              ? 'หมายเหตุ: ปืนใช้ได้เฉพาะกับคู่ battle ตรงข้าม'
-              : isInBattle() 
-                ? 'หมายเหตุ: วัคซีนใช้ได้กับตัวเองหรือคู่ battle ที่มีไพ่ซอมบี้'
-                : 'หมายเหตุ: วัคซีนใช้ได้กับผู้เล่นที่มีไพ่ซอมบี้'}
+            {isInBattle() 
+              ? '⚠️ กติกา: วัคซีนห้ามใช้กับตัวเอง (ใช้ได้เฉพาะคู่ battle ที่มีไพ่ซอมบี้)'
+              : '⚠️ กติกา: วัคซีนห้ามใช้กับตัวเอง (ใช้ได้กับผู้เล่นที่มีไพ่ซอมบี้)'}
           </Typography>
         </DialogContent>
         <DialogActions>

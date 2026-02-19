@@ -142,7 +142,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       // เช็คว่าวางครบ 3 ใบหรือยัง (กติกาใหม่: ได้ไม่เกิน 3 ใบ รวมไพ่พิเศษ)
       const myCards = battle.player1Id === socket.id ? battle.player1Cards : battle.player2Cards;
       if (myCards.length >= 3) {
-        socket.emit('error', { message: 'วางไพ่ได้สูงสุด 3 ใบ (รวมไพ่พิเศษ)' });
+        socket.emit('error', { message: 'วางไพ่ได้สูงสุด 3 ใบ (รวมไพ่พิเศษ เช่น ปืน, ซอมบี้)' });
         return;
       }
 
@@ -158,14 +158,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         }
       }
 
-      // เช็คจำนวนไพ่ปืน (เก็บได้สูงสุด 3 ใบ)
-      if (card.type === 'SHOTGUN') {
-        const shotgunCount = player.cards.filter(c => c.type === 'SHOTGUN').length;
-        if (shotgunCount > 3) {
-          socket.emit('error', { message: 'เก็บไพ่ปืนได้สูงสุด 3 ใบ' });
-          return;
-        }
-      }
+      // ไพ่ปืนและไพ่ซอมบี้สามารถวางลงใน battle ได้ (ไม่ต้องเช็คจำนวนอีก)
 
       // วางไพ่
       if (battle.player1Id === socket.id) {
@@ -298,67 +291,6 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       }
     });
 
-    // ใช้ไพ่ปืนลูกซอง (ใช้ได้เฉพาะตอนอยู่ใน battle และยิงได้แค่คู่ battle)
-    socket.on('use-shotgun', (data: { roomId: string; targetPlayerId: string }) => {
-      const room = rooms.get(data.roomId);
-      if (!room) return;
-
-      // หา battle ที่ผู้เล่นคนนี้อยู่
-      const battle = room.battles.find(b => 
-        (b.player1Id === socket.id || b.player2Id === socket.id) && !b.isComplete
-      );
-
-      // เช็คว่าอยู่ใน battle หรือไม่
-      if (!battle) {
-        socket.emit('error', { message: 'ใช้ไพ่ปืนได้เฉพาะตอนอยู่ใน battle เท่านั้น' });
-        return;
-      }
-
-      // เช็คว่ายิงเฉพาะคู่ battle ตรงข้ามเท่านั้น
-      const opponentId = battle.player1Id === socket.id 
-        ? battle.player2Id 
-        : battle.player1Id;
-      
-      if (data.targetPlayerId !== opponentId) {
-        socket.emit('error', { message: 'ใช้ปืนได้เฉพาะกับคู่ battle ตรงข้ามเท่านั้น' });
-        return;
-      }
-
-      const player = room.players.find(p => p.id === socket.id);
-      const target = room.players.find(p => p.id === data.targetPlayerId);
-      
-      if (!player || !target) return;
-
-      const shotgunIndex = player.cards.findIndex(c => c.type === CardType.SHOTGUN);
-      if (shotgunIndex === -1) {
-        socket.emit('error', { message: 'คุณไม่มีไพ่ปืนลูกซอง' });
-        return;
-      }
-
-      if (target.status !== PlayerStatus.ZOMBIE) {
-        socket.emit('error', { message: 'ใช้ปืนลูกซองกับซอมบี้เท่านั้น' });
-        return;
-      }
-
-      // ลบไพ่ปืนลูกซอง
-      player.cards.splice(shotgunIndex, 1);
-
-      // กำจัดซอมบี้
-      target.status = PlayerStatus.ELIMINATED;
-      target.cards = [];
-
-      io.to(data.roomId).emit('room-updated', room);
-      io.to(data.roomId).emit('message', { 
-        message: `${player.name} ใช้ปืนลูกซองกำจัด ${target.name}!` 
-      });
-
-      // ตรวจสอบว่าเกมจบหรือไม่
-      const gameEnd = checkGameEnd(room.players);
-      if (gameEnd.isEnded) {
-        endGame(room, gameEnd.winner!, gameEnd.reason!, io);
-      }
-    });
-
     // ใช้ไพ่วัคซีน (ใช้กับตัวเองหรือคู่ battle ได้ ถ้าอยู่ใน battle)
     socket.on('use-vaccine', (data: { roomId: string; targetPlayerId: string }) => {
       const room = rooms.get(data.roomId);
@@ -376,19 +308,25 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         return;
       }
 
+      // ห้ามใช้วัคซีนกับตัวเอง (ตามกติกา)
+      if (data.targetPlayerId === socket.id) {
+        socket.emit('error', { message: 'ไม่สามารถใช้วัคซีนกับตัวเองได้' });
+        return;
+      }
+
       // หา battle ที่ผู้เล่นคนนี้อยู่
       const battle = room.battles.find(b => 
         (b.player1Id === socket.id || b.player2Id === socket.id) && !b.isComplete
       );
 
-      // ถ้าอยู่ใน battle ให้ใช้ได้เฉพาะกับตัวเองหรือคู่ battle
+      // ถ้าอยู่ใน battle ให้ใช้ได้เฉพาะกับคู่ battle เท่านั้น
       if (battle) {
         const opponentId = battle.player1Id === socket.id 
           ? battle.player2Id 
           : battle.player1Id;
         
-        if (data.targetPlayerId !== socket.id && data.targetPlayerId !== opponentId) {
-          socket.emit('error', { message: 'ใช้วัคซีนได้เฉพาะกับตัวเองหรือคู่ battle เท่านั้น' });
+        if (data.targetPlayerId !== opponentId) {
+          socket.emit('error', { message: 'ใช้วัคซีนได้เฉพาะกับคู่ battle เท่านั้น' });
           return;
         }
       }
@@ -596,7 +534,7 @@ function startGame(roomId: string, io: SocketServer) {
   
   room.gameStarted = true;
   
-  // ตั้งเวลาเริ่มเกมและเวลาจบ (5 นาที)
+  // ตั้งเวลาเริ่มเกมและเวลาจบ (15 นาที)
   const now = Date.now();
   room.gameStartTime = now;
   room.gameEndTime = now + (15 * 60 * 1000); // 15 นาที
@@ -606,17 +544,17 @@ function startGame(roomId: string, io: SocketServer) {
   
   // ไม่แสดงข้อความจำนวนมนุษย์/ซอมบี้อีกต่อไป
   io.to(roomId).emit('message', { 
-    message: `เกมเริ่มแล้ว! เวลา 5 นาที` 
+    message: `เกมเริ่มแล้ว! เวลา 15 นาที` 
   });
   
-  // ตั้ง timer สำหรับจบเกมหลัง 5 นาที
+  // ตั้ง timer สำหรับจบเกมหลัง 15 นาที
   const timer = setTimeout(() => {
     const currentRoom = rooms.get(roomId);
     if (currentRoom && !currentRoom.gameEnded) {
       endGameByTime(currentRoom, io);
     }
     gameTimers.delete(roomId);
-  }, 5 * 60 * 1000);
+  }, 15 * 60 * 1000);
   
   gameTimers.set(roomId, timer);
 }
@@ -638,8 +576,18 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
   
   // === กรณีที่ต้องรอผู้เล่นเลือก (ยึดปืนหรือยิงฝั่งตรงข้าม) ===
   if (result.needsPlayerChoice && result.chooserId && result.loserId) {
+    console.log('🔫 Shotgun choice required:', {
+      chooserId: result.chooserId,
+      loserId: result.loserId,
+      player1Id: player1.id,
+      player2Id: player2.id
+    });
+    
     const loserBattleCards = result.loserId === player1.id ? battle.player1Cards : battle.player2Cards;
+    console.log('🃏 Loser battle cards:', loserBattleCards.map(c => ({ id: c.id, type: c.type })));
+    
     const shotgunCard = loserBattleCards.find(c => c.type === CardType.SHOTGUN);
+    console.log('🔫 Found shotgun card:', shotgunCard ? 'YES' : 'NO');
     
     if (shotgunCard) {
       battle.pendingShotgunChoice = {
@@ -748,8 +696,9 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
       message: `${winner.name} ชนะ! (${total1} vs ${total2})` 
     });
   } else {
+    // กรณีเสมอ - ไม่มีผู้ชนะ ไพ่ที่วางจะหายไปจาก battle
     io.to(room.id).emit('message', { 
-      message: 'เสมอ!' 
+      message: `เสมอ! (${total1} vs ${total2}) - ไม่มีผู้ชนะ` 
     });
   }
   
