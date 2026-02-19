@@ -42,6 +42,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       const room: GameRoom = {
         id: roomId,
         players: [player],
+        battles: [], // เพิ่ม battles array
         gameStarted: false,
         gameEnded: false
       };
@@ -103,8 +104,18 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
     // วางไพ่ในการแบทเทิล
     socket.on('play-card', (data: { roomId: string; cardId: string }) => {
       const room = rooms.get(data.roomId);
-      if (!room || !room.currentBattle) {
-        console.log('play-card: No room or battle');
+      if (!room) {
+        console.log('play-card: No room');
+        return;
+      }
+
+      // หา battle ที่ผู้เล่นคนนี้อยู่
+      const battle = room.battles.find(b => 
+        (b.player1Id === socket.id || b.player2Id === socket.id) && !b.isComplete
+      );
+
+      if (!battle) {
+        console.log('play-card: No active battle for this player');
         return;
       }
 
@@ -121,7 +132,6 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       }
 
       const card = player.cards[cardIndex];
-      const battle = room.currentBattle;
 
       console.log('Battle IDs:', {
         player1Id: battle.player1Id,
@@ -129,11 +139,32 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         currentSocketId: socket.id
       });
 
-      // เช็คว่าวางครบ 3 ใบหรือยัง (แก้ไข: ให้วางได้ไม่เกิน 3 ใบ)
+      // เช็คว่าวางครบ 4 ใบหรือยัง (กติกาใหม่: ได้ไม่เกิน 4 ใบ รวมไพ่พิเศษ)
       const myCards = battle.player1Id === socket.id ? battle.player1Cards : battle.player2Cards;
-      if (myCards.length >= 3) {
-        socket.emit('error', { message: 'วางไพ่ได้สูงสุด 3 ใบ' });
+      if (myCards.length >= 4) {
+        socket.emit('error', { message: 'วางไพ่ได้สูงสุด 4 ใบ (รวมไพ่พิเศษ)' });
         return;
+      }
+
+      // เช็คว่าไพ่ที่วางเป็นดอกเดียวกันหรือไม่ (เฉพาะไพ่ตัวเลข)
+      const tempCards = [...myCards, card];
+      const numberCards = tempCards.filter(c => c.type === 'NUMBER' && c.suit);
+      if (numberCards.length > 1) {
+        const firstSuit = numberCards[0].suit;
+        const sameSuit = numberCards.every(c => c.suit === firstSuit);
+        if (!sameSuit) {
+          socket.emit('error', { message: 'ต้องวางไพ่ดอกเดียวกัน!' });
+          return;
+        }
+      }
+
+      // เช็คจำนวนไพ่ปืน (เก็บได้สูงสุด 3 ใบ)
+      if (card.type === 'SHOTGUN') {
+        const shotgunCount = player.cards.filter(c => c.type === 'SHOTGUN').length;
+        if (shotgunCount > 3) {
+          socket.emit('error', { message: 'เก็บไพ่ปืนได้สูงสุด 3 ใบ' });
+          return;
+        }
       }
 
       // วางไพ่
@@ -153,6 +184,9 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       // ลบไพ่ออกจากมือผู้เล่น
       player.cards.splice(cardIndex, 1);
 
+      // อัพเดท currentBattle เพื่อ backward compatibility
+      room.currentBattle = battle;
+
       // ส่งข้อมูลห้องที่อัพเดตกลับไปให้ทุกคน
       console.log('Emitting room-updated with battle:', {
         player1Cards: battle.player1Cards.length,
@@ -163,29 +197,31 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       // หา index ปัจจุบันหลัง push แล้ว
       const currentCards = battle.player1Id === socket.id ? battle.player1Cards : battle.player2Cards;
       io.to(data.roomId).emit('message', { 
-        message: `${player.name} วางไพ่ ${currentCards.length}/3` 
+        message: `${player.name} วางไพ่ ${currentCards.length}/4` 
       });
     });
 
     // ดึงไพ่กลับจาก battle (ก่อนเปิดไพ่)
     socket.on('remove-card', (data: { roomId: string; cardIndex: number }) => {
       const room = rooms.get(data.roomId);
-      if (!room || !room.currentBattle) {
-        console.log('remove-card: No room or battle');
+      if (!room) {
+        console.log('remove-card: No room');
+        return;
+      }
+
+      // หา battle ที่ผู้เล่นคนนี้อยู่
+      const battle = room.battles.find(b => 
+        (b.player1Id === socket.id || b.player2Id === socket.id) && !b.isComplete
+      );
+
+      if (!battle) {
+        console.log('remove-card: No active battle for this player');
         return;
       }
 
       const player = room.players.find(p => p.id === socket.id);
       if (!player) {
         console.log('remove-card: Player not found');
-        return;
-      }
-
-      const battle = room.currentBattle;
-
-      // เช็คว่าเป็นผู้เล่นที่อยู่ใน battle หรือไม่
-      if (battle.player1Id !== socket.id && battle.player2Id !== socket.id) {
-        socket.emit('error', { message: 'คุณไม่ได้อยู่ใน battle นี้' });
         return;
       }
 
@@ -209,6 +245,10 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       // คืนไพ่กลับให้ผู้เล่น
       if (removedCard) {
         player.cards.push(removedCard);
+        
+        // อัพเดท currentBattle
+        room.currentBattle = battle;
+        
         io.to(data.roomId).emit('room-updated', room);
         io.to(data.roomId).emit('message', { 
           message: `${player.name} ดึงไพ่กลับ` 
@@ -219,9 +259,14 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
     // เปิดไพ่
     socket.on('reveal-cards', (roomId: string) => {
       const room = rooms.get(roomId);
-      if (!room || !room.currentBattle) return;
+      if (!room) return;
 
-      const battle = room.currentBattle;
+      // หา battle ที่ผู้เล่นคนนี้อยู่
+      const battle = room.battles.find(b => 
+        (b.player1Id === socket.id || b.player2Id === socket.id) && !b.isComplete
+      );
+
+      if (!battle) return;
       
       // เช็คว่าวางไพ่อย่างน้อย 1 ใบแล้วหรือยัง
       const myCards = battle.player1Id === socket.id ? battle.player1Cards : battle.player2Cards;
@@ -237,6 +282,9 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         battle.player2CardsRevealed = battle.player2CardsRevealed.map(() => true);
       }
 
+      // อัพเดท currentBattle
+      room.currentBattle = battle;
+
       io.to(roomId).emit('room-updated', room);
 
       // ถ้าทั้งสองคนเปิดไพ่แล้วและทั้งสองคนวางไพ่อย่างน้อย 1 ใบ ให้ตัดสินผล
@@ -245,7 +293,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       
       if (allPlayer1Revealed && allPlayer2Revealed && battle.player1Cards.length > 0 && battle.player2Cards.length > 0) {
         setTimeout(() => {
-          resolveBattle(room, io);
+          resolveBattle(room, battle, io);
         }, 1000);
       }
     });
@@ -255,22 +303,21 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       const room = rooms.get(data.roomId);
       if (!room) return;
 
+      // หา battle ที่ผู้เล่นคนนี้อยู่
+      const battle = room.battles.find(b => 
+        (b.player1Id === socket.id || b.player2Id === socket.id) && !b.isComplete
+      );
+
       // เช็คว่าอยู่ใน battle หรือไม่
-      if (!room.currentBattle) {
+      if (!battle) {
         socket.emit('error', { message: 'ใช้ไพ่ปืนได้เฉพาะตอนอยู่ใน battle เท่านั้น' });
         return;
       }
 
-      // เช็คว่าเป็นผู้เล่นที่อยู่ใน battle หรือไม่
-      if (room.currentBattle.player1Id !== socket.id && room.currentBattle.player2Id !== socket.id) {
-        socket.emit('error', { message: 'คุณไม่ได้อยู่ใน battle นี้' });
-        return;
-      }
-
       // เช็คว่ายิงเฉพาะคู่ battle ตรงข้ามเท่านั้น
-      const opponentId = room.currentBattle.player1Id === socket.id 
-        ? room.currentBattle.player2Id 
-        : room.currentBattle.player1Id;
+      const opponentId = battle.player1Id === socket.id 
+        ? battle.player2Id 
+        : battle.player1Id;
       
       if (data.targetPlayerId !== opponentId) {
         socket.emit('error', { message: 'ใช้ปืนได้เฉพาะกับคู่ battle ตรงข้ามเท่านั้น' });
@@ -329,12 +376,16 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         return;
       }
 
+      // หา battle ที่ผู้เล่นคนนี้อยู่
+      const battle = room.battles.find(b => 
+        (b.player1Id === socket.id || b.player2Id === socket.id) && !b.isComplete
+      );
+
       // ถ้าอยู่ใน battle ให้ใช้ได้เฉพาะกับตัวเองหรือคู่ battle
-      if (room.currentBattle && 
-          (room.currentBattle.player1Id === socket.id || room.currentBattle.player2Id === socket.id)) {
-        const opponentId = room.currentBattle.player1Id === socket.id 
-          ? room.currentBattle.player2Id 
-          : room.currentBattle.player1Id;
+      if (battle) {
+        const opponentId = battle.player1Id === socket.id 
+          ? battle.player2Id 
+          : battle.player1Id;
         
         if (data.targetPlayerId !== socket.id && data.targetPlayerId !== opponentId) {
           socket.emit('error', { message: 'ใช้วัคซีนได้เฉพาะกับตัวเองหรือคู่ battle เท่านั้น' });
@@ -366,13 +417,25 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
     // เริ่มแบทเทิลใหม่
     socket.on('start-battle', (data: { roomId: string; opponentId: string }) => {
       const room = rooms.get(data.roomId);
-      if (!room || room.currentBattle) return;
+      if (!room) return;
 
       const player = room.players.find(p => p.id === socket.id);
       const opponent = room.players.find(p => p.id === data.opponentId);
       
       if (!player || !opponent) return;
       if (player.status === PlayerStatus.ELIMINATED || opponent.status === PlayerStatus.ELIMINATED) return;
+
+      // เช็คว่าผู้เล่นคนนี้กำลังอยู่ใน battle อื่นหรือไม่
+      const existingBattle = room.battles.find(b => 
+        (b.player1Id === socket.id || b.player2Id === socket.id || 
+         b.player1Id === data.opponentId || b.player2Id === data.opponentId) && 
+        !b.isComplete
+      );
+
+      if (existingBattle) {
+        socket.emit('error', { message: 'คุณหรือคู่ต่อสู้กำลังอยู่ใน battle อยู่แล้ว' });
+        return;
+      }
 
       const battle: Battle = {
         id: Math.random().toString(36).substring(7),
@@ -385,7 +448,14 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         isComplete: false
       };
 
-      room.currentBattle = battle;
+      // เพิ่ม battle ใหม่เข้าไปใน battles array
+      room.battles.push(battle);
+      
+      // อัพเดท currentBattle สำหรับ backward compatibility
+      if (!room.currentBattle) {
+        room.currentBattle = battle;
+      }
+
       io.to(data.roomId).emit('room-updated', room);
       io.to(data.roomId).emit('message', { 
         message: `${player.name} vs ${opponent.name} - เริ่มแบทเทิล!` 
@@ -458,9 +528,8 @@ function startGame(roomId: string, io: SocketServer) {
   gameTimers.set(roomId, timer);
 }
 
-function resolveBattle(room: GameRoom, io: SocketServer) {
-  const battle = room.currentBattle;
-  // เปลี่ยนเงื่อนไข: ต้องวางอย่างน้อย 1 ใบ (แทนที่จะเป็น 3 ใบ)
+function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
+  // ต้องวางอย่างน้อย 1 ใบ
   if (!battle || battle.player1Cards.length < 1 || battle.player2Cards.length < 1) return;
 
   const player1 = room.players.find(p => p.id === battle.player1Id);
@@ -468,18 +537,98 @@ function resolveBattle(room: GameRoom, io: SocketServer) {
   
   if (!player1 || !player2) return;
 
-  const winnerId = determineBattleWinner(battle.player1Cards, battle.player2Cards, player1, player2);
+  const result = determineBattleWinner(battle.player1Cards, battle.player2Cards, player1, player2);
+  const winnerId = result.winnerId;
   
+  const total1 = calculateTotalValue(battle.player1Cards);
+  const total2 = calculateTotalValue(battle.player2Cards);
+  
+  // === จัดการกรณีพิเศษต่างๆ ===
+  
+  // กรณีมีการกำจัด (ยิงตาย)
+  if (result.eliminatedPlayerId) {
+    const eliminated = room.players.find(p => p.id === result.eliminatedPlayerId);
+    if (eliminated) {
+      eliminated.status = PlayerStatus.ELIMINATED;
+      eliminated.cards = [];
+      io.to(room.id).emit('message', { 
+        message: `${eliminated.name} ถูกยิงตาย!` 
+      });
+    }
+  }
+  
+  // กรณีมีการยึดปืน (shotgunAction === 'stolen')
+  if (result.shotgunAction === 'stolen' && result.shotgunOwnerId) {
+    const newOwner = room.players.find(p => p.id === result.shotgunOwnerId);
+    const loser = winnerId === player1.id ? player2 : player1;
+    
+    if (newOwner && loser) {
+      // หาไพ่ปืนจาก battle cards
+      const loserCards = winnerId === player1.id ? battle.player2Cards : battle.player1Cards;
+      const shotgunCard = loserCards.find(c => c.type === CardType.SHOTGUN);
+      
+      if (shotgunCard) {
+        // ตรวจสอบว่าเก็บปืนได้สูงสุด 3 ใบ
+        const currentShotguns = newOwner.cards.filter(c => c.type === CardType.SHOTGUN).length;
+        if (currentShotguns < 3) {
+          newOwner.cards.push(shotgunCard);
+          io.to(room.id).emit('message', { 
+            message: `${newOwner.name} ยึดปืนจาก ${loser.name}!` 
+          });
+        }
+      }
+    }
+  }
+  
+  // กรณีมีการแพร่เชื้อ
+  if (result.isInfection && result.infectedPlayerId) {
+    const infectedPlayer = room.players.find(p => p.id === result.infectedPlayerId);
+    if (infectedPlayer) {
+      infectedPlayer.status = PlayerStatus.ZOMBIE;
+      infectedPlayer.cards.push({
+        id: `zombie-infected-${infectedPlayer.id}-${Date.now()}`,
+        type: CardType.ZOMBIE
+      });
+      io.to(room.id).emit('message', { 
+        message: `${infectedPlayer.name} ติดเชื้อซอมบี้!` 
+      });
+    }
+  }
+  
+  // กรณีซอมบี้ถูกเปิดเผยตัวตน (แพร่เชื้อไม่สำเร็จ)
+  if (result.zombieRevealed && result.zombiePlayerId) {
+    const zombiePlayer = room.players.find(p => p.id === result.zombiePlayerId);
+    if (zombiePlayer) {
+      io.to(room.id).emit('message', { 
+        message: `${zombiePlayer.name} ถูกเปิดเผยว่าเป็นซอมบี้!` 
+      });
+    }
+  }
+  
+  // กรณีคืนไพ่ซอมบี้กลับ
+  if (result.zombieCardReturned && result.zombiePlayerId) {
+    const zombiePlayer = room.players.find(p => p.id === result.zombiePlayerId);
+    if (zombiePlayer) {
+      // หาไพ่ซอมบี้จาก battle cards
+      const zombieCards = result.zombiePlayerId === player1.id ? battle.player1Cards : battle.player2Cards;
+      const zombieCard = zombieCards.find(c => c.type === CardType.ZOMBIE);
+      
+      if (zombieCard) {
+        // คืนไพ่ซอมบี้กลับให้ผู้เล่น
+        zombiePlayer.cards.push(zombieCard);
+        io.to(room.id).emit('message', { 
+          message: `${zombiePlayer.name} ได้ไพ่ซอมบี้กลับคืน` 
+        });
+      }
+    }
+  }
+  
+  // ผู้ชนะได้รับไพ่ตัวเลขหนึ่งใบจากไพ่ที่ผู้แพ้วางลงในกระดาน battle
   if (winnerId) {
     battle.winnerId = winnerId;
     const winner = winnerId === player1.id ? player1 : player2;
-    const loser = winnerId === player1.id ? player2 : player1;
     const loserBattleCards = winnerId === player1.id ? battle.player2Cards : battle.player1Cards;
     
-    const total1 = calculateTotalValue(battle.player1Cards);
-    const total2 = calculateTotalValue(battle.player2Cards);
-    
-    // ผู้ชนะได้รับไพ่ตัวเลขหนึ่งใบจากไพ่ที่ผู้แพ้วางลงในกระดาน battle (ไม่ใช่จากมือ)
     const loserNumberCardsInBattle = loserBattleCards.filter(c => c.type === CardType.NUMBER);
     if (loserNumberCardsInBattle.length > 0) {
       const randomIndex = Math.floor(Math.random() * loserNumberCardsInBattle.length);
@@ -493,34 +642,6 @@ function resolveBattle(room: GameRoom, io: SocketServer) {
       });
     }
     
-    // เช็คว่ามีไพ่ซอมบี้ในไพ่ที่วางหรือไม่
-    const hasZombieInPlayer1Cards = battle.player1Cards.some(c => c.type === CardType.ZOMBIE);
-    const hasZombieInPlayer2Cards = battle.player2Cards.some(c => c.type === CardType.ZOMBIE);
-    
-    if (hasZombieInPlayer1Cards && winnerId === player1.id) {
-      if (loser.status !== PlayerStatus.ZOMBIE) {
-        loser.status = PlayerStatus.ZOMBIE;
-        loser.cards.push({
-          id: `zombie-${Date.now()}`,
-          type: CardType.ZOMBIE
-        });
-        io.to(room.id).emit('message', { 
-          message: `${loser.name} ติดเชื้อซอมบี้!` 
-        });
-      }
-    } else if (hasZombieInPlayer2Cards && winnerId === player2.id) {
-      if (loser.status !== PlayerStatus.ZOMBIE) {
-        loser.status = PlayerStatus.ZOMBIE;
-        loser.cards.push({
-          id: `zombie-${Date.now()}`,
-          type: CardType.ZOMBIE
-        });
-        io.to(room.id).emit('message', { 
-          message: `${loser.name} ติดเชื้อซอมบี้!` 
-        });
-      }
-    }
-    
     io.to(room.id).emit('message', { 
       message: `${winner.name} ชนะ! (${total1} vs ${total2})` 
     });
@@ -531,7 +652,20 @@ function resolveBattle(room: GameRoom, io: SocketServer) {
   }
   
   battle.isComplete = true;
-  room.currentBattle = undefined;
+  
+  // ลบ battle ที่จบแล้วออกจาก battles array
+  const battleIndex = room.battles.findIndex(b => b.id === battle.id);
+  if (battleIndex !== -1) {
+    room.battles.splice(battleIndex, 1);
+  }
+  
+  // ถ้าเป็น battle สุดท้าย ให้ลบ currentBattle ด้วย
+  if (room.battles.length === 0) {
+    room.currentBattle = undefined;
+  } else {
+    // อัพเดท currentBattle ให้เป็น battle ที่ยังไม่จบ
+    room.currentBattle = room.battles.find(b => !b.isComplete);
+  }
   
   io.to(room.id).emit('room-updated', room);
   

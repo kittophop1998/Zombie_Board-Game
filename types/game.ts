@@ -56,7 +56,8 @@ export interface Battle {
 export interface GameRoom {
   id: string;
   players: Player[];
-  currentBattle?: Battle;
+  currentBattle?: Battle; // เก็บไว้เพื่อ backward compatibility
+  battles: Battle[]; // เก็บ battle ทั้งหมดที่กำลังดำเนินการอยู่
   gameStarted: boolean;
   gameEnded: boolean;
   winningTeam?: 'HUMAN' | 'ZOMBIE';
