@@ -112,6 +112,34 @@ export function distributeSpecialCards(players: Player[]): Player[] {
   return updatedPlayers;
 }
 
+// ============================================================
+// === ระบบนับแต้มแบบ 9เก (Gao Ki Hand Rankings) ===
+// ============================================================
+
+// ประเภทมือไพ่ (เรียงจากอ่อน → แรง)
+export enum HandRank {
+  HIGH_CARD = 0,      // แต้มธรรมดา (นับหลักหน่วย)
+  STRAIGHT = 1,       // ชุดเรียง เช่น 1-2-3, 4-5-6
+  FACE_SET = 2,       // ชุดขอบ เช่น J-Q-K หรือ Q-Q-K (ทุกใบต้องเป็น J/Q/K)
+  STRAIGHT_FLUSH = 3, // ชุดเรียงสี เช่น 1-2-3 สีเดียวกัน หรือ J-Q-K สีเดียวกัน
+  THREE_OF_A_KIND = 4 // ชุดตอง เช่น 1-1-1, K-K-K
+}
+
+export interface HandResult {
+  rank: HandRank;
+  rankName: string;
+  score: number; // แต้มรวมหลักหน่วย (ใช้เมื่อ rank เท่ากัน)
+}
+
+// ชื่อภาษาไทยของแต่ละ rank
+const HAND_RANK_NAMES: Record<HandRank, string> = {
+  [HandRank.HIGH_CARD]: 'แต้มธรรมดา',
+  [HandRank.STRAIGHT]: 'ชุดเรียง',
+  [HandRank.FACE_SET]: 'ชุดขอบ',
+  [HandRank.STRAIGHT_FLUSH]: 'ชุดเรียงสี',
+  [HandRank.THREE_OF_A_KIND]: 'ชุดตอง',
+};
+
 // คำนวณแต้มไพ่
 export function calculateCardValue(card: Card | undefined): number {
   if (!card) return 0;
@@ -140,6 +168,72 @@ export function checkSameSuit(cards: Card[]): boolean {
   
   const firstSuit = numberCards[0].suit;
   return numberCards.every(c => c.suit === firstSuit);
+}
+
+// ตรวจสอบ ชุดตอง (Three of a Kind): ไพ่ 3 ใบมีค่าเท่ากันทุกใบ
+function isThreeOfAKind(numberCards: Card[]): boolean {
+  if (numberCards.length !== 3) return false;
+  const [a, b, c] = numberCards.map(c => c.value!);
+  return a === b && b === c;
+}
+
+// ตรวจสอบ ชุดเรียง (Straight): ไพ่ 3 ใบเรียงติดกัน (ไม่จำกัดดอก)
+function isStraight(numberCards: Card[]): boolean {
+  if (numberCards.length !== 3) return false;
+  const values = numberCards.map(c => c.value!).sort((a, b) => a - b);
+  return values[1] === values[0] + 1 && values[2] === values[1] + 1;
+}
+
+// ตรวจสอบ ชุดขอบ (Face Set): ไพ่ทุกใบต้องเป็น J(11), Q(12), หรือ K(13)
+function isFaceSet(numberCards: Card[]): boolean {
+  if (numberCards.length !== 3) return false;
+  return numberCards.every(c => c.value! >= 11 && c.value! <= 13);
+}
+
+// ตรวจสอบ ชุดเรียงสี (Straight Flush): เรียงติดกัน + ดอกเดียวกันทุกใบ
+function isStraightFlush(numberCards: Card[]): boolean {
+  if (numberCards.length !== 3) return false;
+  return isStraight(numberCards) && checkSameSuit(numberCards);
+}
+
+// วิเคราะห์มือไพ่แบบ 9เก และคืน HandResult
+export function evaluateHand(cards: Card[]): HandResult {
+  const numberCards = cards.filter(c => c.type === CardType.NUMBER && c.value !== undefined);
+  
+  // แต้มหลักหน่วย (เอาเลขหลักหน่วยของผลรวม ตามกฎ 9เก)
+  const total = numberCards.reduce((sum, c) => sum + c.value!, 0);
+  const score = total % 10;
+
+  // ตรวจสอบชุดพิเศษ (เรียงจากแรงสุด → อ่อนสุด)
+  if (numberCards.length === 3) {
+    if (isThreeOfAKind(numberCards)) {
+      return { rank: HandRank.THREE_OF_A_KIND, rankName: HAND_RANK_NAMES[HandRank.THREE_OF_A_KIND], score };
+    }
+    if (isStraightFlush(numberCards)) {
+      return { rank: HandRank.STRAIGHT_FLUSH, rankName: HAND_RANK_NAMES[HandRank.STRAIGHT_FLUSH], score };
+    }
+    if (isFaceSet(numberCards)) {
+      return { rank: HandRank.FACE_SET, rankName: HAND_RANK_NAMES[HandRank.FACE_SET], score };
+    }
+    if (isStraight(numberCards)) {
+      return { rank: HandRank.STRAIGHT, rankName: HAND_RANK_NAMES[HandRank.STRAIGHT], score };
+    }
+  }
+
+  return { rank: HandRank.HIGH_CARD, rankName: HAND_RANK_NAMES[HandRank.HIGH_CARD], score };
+}
+
+// เปรียบเทียบมือไพ่สองฝั่ง: คืน 1 ถ้า hand1 ชนะ, -1 ถ้า hand2 ชนะ, 0 ถ้าเสมอ
+export function compareHands(hand1: HandResult, hand2: HandResult): number {
+  if (hand1.rank !== hand2.rank) {
+    return hand1.rank > hand2.rank ? 1 : -1;
+  }
+  // rank เท่ากัน → เทียบ score (หลักหน่วย)
+  // กรณีพิเศษ: ชุดตอง ถ้า score เท่ากันให้เสมอ (ไม่ต้องเทียบอีก)
+  if (hand1.score !== hand2.score) {
+    return hand1.score > hand2.score ? 1 : -1;
+  }
+  return 0; // เสมอ
 }
 
 // ตรวจสอบผู้ชนะในการแบทเทิล และจัดการกติกาพิเศษทั้งหมด
@@ -172,30 +266,30 @@ export function determineBattleWinner(
   const hasZombieCard1 = cards1.some(card => card.type === CardType.ZOMBIE);
   const hasZombieCard2 = cards2.some(card => card.type === CardType.ZOMBIE);
   
-  // คำนวณแต้ม
-  const total1 = calculateTotalValue(cards1);
-  const total2 = calculateTotalValue(cards2);
+  // === ประเมินมือไพ่แบบ 9เก ===
+  const hand1 = evaluateHand(cards1);
+  const hand2 = evaluateHand(cards2);
+  const cmp = compareHands(hand1, hand2); // 1=p1 ชนะ, -1=p2 ชนะ, 0=เสมอ
 
   // ======================================================
   // === กรณีที่มีไพ่ปืน (ฝั่งใดฝั่งหนึ่ง หรือทั้งสอง) ===
   // ======================================================
-  // ถ้ามีปืนอย่างน้อย 1 ฝั่ง: ฝั่งที่มีแต้มสูงกว่าจะได้สิทธิ์เลือก
-  // (ยึดปืน หรือ ยิงฝ่ายตรงข้ามทันที)
-  // ยกเว้น: ถ้าผู้วางปืนแต้มสูงกว่า จะยิงฝ่ายตรงข้ามตายทันทีแทน
+  // ใช้ผลเปรียบเทียบมือไพ่แบบ 9เก (cmp) แทนการเทียบแต้มรวม
+  // ผู้วางปืน+ชนะ → ยิงฝ่ายตรงข้ามตาย; ผู้วางปืน+แพ้ → ฝ่ายชนะเลือกได้
 
   if (hasShotgun1 || hasShotgun2) {
     // --- กรณี: Player1 วางปืน ---
     if (hasShotgun1 && !hasShotgun2) {
-      if (total1 > total2) {
-        // คนวางปืน (p1) แต้มสูงกว่า → ฝ่ายตรงข้ามตายทันที
+      if (cmp > 0) {
+        // คนวางปืน (p1) ชนะ → ฝ่ายตรงข้ามตายทันที
         return {
           winnerId: player1.id,
           isInfection: false,
           eliminatedPlayerId: player2.id,
           shotgunAction: 'kill_opponent'
         };
-      } else if (total1 < total2) {
-        // คนวางปืน (p1) แต้มน้อยกว่า → อีกฝั่ง (p2) เลือกได้
+      } else if (cmp < 0) {
+        // คนวางปืน (p1) แพ้ → อีกฝั่ง (p2) เลือกได้
         return {
           winnerId: player2.id,
           isInfection: false,
@@ -211,16 +305,16 @@ export function determineBattleWinner(
 
     // --- กรณี: Player2 วางปืน ---
     if (hasShotgun2 && !hasShotgun1) {
-      if (total2 > total1) {
-        // คนวางปืน (p2) แต้มสูงกว่า → ฝ่ายตรงข้ามตายทันที
+      if (cmp < 0) {
+        // คนวางปืน (p2) ชนะ → ฝ่ายตรงข้ามตายทันที
         return {
           winnerId: player2.id,
           isInfection: false,
           eliminatedPlayerId: player1.id,
           shotgunAction: 'kill_opponent'
         };
-      } else if (total2 < total1) {
-        // คนวางปืน (p2) แต้มน้อยกว่า → อีกฝั่ง (p1) เลือกได้
+      } else if (cmp > 0) {
+        // คนวางปืน (p2) แพ้ → อีกฝั่ง (p1) เลือกได้
         return {
           winnerId: player1.id,
           isInfection: false,
@@ -234,16 +328,16 @@ export function determineBattleWinner(
       return { winnerId: null, isInfection: false };
     }
 
-    // --- กรณี: ทั้งสองวางปืน → นับแต้มปกติ ฝ่ายชนะยิงอีกฝ่ายตายทันที ---
+    // --- กรณี: ทั้งสองวางปืน → ชนะด้วยมือ 9เก ฝ่ายชนะยิงอีกฝ่ายตายทันที ---
     if (hasShotgun1 && hasShotgun2) {
-      if (total1 > total2) {
+      if (cmp > 0) {
         return {
           winnerId: player1.id,
           isInfection: false,
           eliminatedPlayerId: player2.id,
           shotgunAction: 'kill_opponent'
         };
-      } else if (total2 > total1) {
+      } else if (cmp < 0) {
         return {
           winnerId: player2.id,
           isInfection: false,
@@ -262,16 +356,16 @@ export function determineBattleWinner(
   
   // Player1 เป็นซอมบี้และวางไพ่ซอมบี้
   if (hasZombieCard1 && player1.status === PlayerStatus.ZOMBIE) {
-    // ถ้า player2 เป็นซอมบี้อยู่แล้ว ไม่สามารถแพร่เชื้อได้ นับคะแนนตามปกติ
+    // ถ้า player2 เป็นซอมบี้อยู่แล้ว ไม่สามารถแพร่เชื้อได้ นับด้วยมือ 9เก
     if (player2.status === PlayerStatus.ZOMBIE) {
-      if (total1 > total2) return { winnerId: player1.id, isInfection: false };
-      if (total2 > total1) return { winnerId: player2.id, isInfection: false };
+      if (cmp > 0) return { winnerId: player1.id, isInfection: false };
+      if (cmp < 0) return { winnerId: player2.id, isInfection: false };
       return { winnerId: null, isInfection: false };
     }
     
     // ถ้า player2 เป็นมนุษย์
-    // 3.1 แต้มซอมบี้สูงกว่า -> แพร่เชื้อสำเร็จ และคืนไพ่ซอมบี้
-    if (total1 > total2) {
+    // 3.1 มือ 9เก ของซอมบี้แรงกว่า -> แพร่เชื้อสำเร็จ และคืนไพ่ซอมบี้
+    if (cmp > 0) {
       return {
         winnerId: player1.id,
         isInfection: true,
@@ -280,8 +374,8 @@ export function determineBattleWinner(
         zombieCardReturned: true // คืนไพ่ซอมบี้กลับ
       };
     }
-    // 3.2 แต้มซอมบี้น้อยกว่า -> แพร่เชื้อไม่สำเร็จ และเปิดเผยตัวตน
-    else if (total1 < total2) {
+    // 3.2 มือ 9เก ของซอมบี้อ่อนกว่า -> แพร่เชื้อไม่สำเร็จ และเปิดเผยตัวตน
+    else if (cmp < 0) {
       return {
         winnerId: player2.id,
         isInfection: false,
@@ -300,16 +394,16 @@ export function determineBattleWinner(
   
   // Player2 เป็นซอมบี้และวางไพ่ซอมบี้
   if (hasZombieCard2 && player2.status === PlayerStatus.ZOMBIE) {
-    // ถ้า player1 เป็นซอมบี้อยู่แล้ว ไม่สามารถแพร่เชื้อได้ นับคะแนนตามปกติ
+    // ถ้า player1 เป็นซอมบี้อยู่แล้ว ไม่สามารถแพร่เชื้อได้ นับด้วยมือ 9เก
     if (player1.status === PlayerStatus.ZOMBIE) {
-      if (total1 > total2) return { winnerId: player1.id, isInfection: false };
-      if (total2 > total1) return { winnerId: player2.id, isInfection: false };
+      if (cmp > 0) return { winnerId: player1.id, isInfection: false };
+      if (cmp < 0) return { winnerId: player2.id, isInfection: false };
       return { winnerId: null, isInfection: false };
     }
     
     // ถ้า player1 เป็นมนุษย์
-    // 3.1 แต้มซอมบี้สูงกว่า -> แพร่เชื้อสำเร็จ และคืนไพ่ซอมบี้
-    if (total2 > total1) {
+    // 3.1 มือ 9เก ของซอมบี้แรงกว่า -> แพร่เชื้อสำเร็จ และคืนไพ่ซอมบี้
+    if (cmp < 0) {
       return {
         winnerId: player2.id,
         isInfection: true,
@@ -318,8 +412,8 @@ export function determineBattleWinner(
         zombieCardReturned: true
       };
     }
-    // 3.2 แต้มซอมบี้น้อยกว่า -> แพร่เชื้อไม่สำเร็จ และเปิดเผยตัวตน
-    else if (total2 < total1) {
+    // 3.2 มือ 9เก ของซอมบี้อ่อนกว่า -> แพร่เชื้อไม่สำเร็จ และเปิดเผยตัวตน
+    else if (cmp > 0) {
       return {
         winnerId: player1.id,
         isInfection: false,
@@ -336,9 +430,9 @@ export function determineBattleWinner(
     };
   }
   
-  // === กรณีปกติ: นับคะแนนตามปกติ ===
-  if (total1 > total2) return { winnerId: player1.id, isInfection: false };
-  if (total2 > total1) return { winnerId: player2.id, isInfection: false };
+  // === กรณีปกติ: เปรียบเทียบมือไพ่แบบ 9เก ===
+  if (cmp > 0) return { winnerId: player1.id, isInfection: false };
+  if (cmp < 0) return { winnerId: player2.id, isInfection: false };
   
   return { winnerId: null, isInfection: false }; // เสมอ
 }
