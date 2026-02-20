@@ -48,6 +48,8 @@ export interface Battle {
   player2Cards: Card[];
   player1CardsRevealed: boolean[];
   player2CardsRevealed: boolean[];
+  player1Confirmed: boolean; // ยืนยันพร้อมเปิดไพ่แล้ว
+  player2Confirmed: boolean; // ยืนยันพร้อมเปิดไพ่แล้ว
   winnerId?: string;
   isComplete: boolean;
   pendingShotgunChoice?: {

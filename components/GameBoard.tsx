@@ -253,9 +253,9 @@ export default function GameBoard() {
     socket.emit('remove-card', { roomId: room.id, cardIndex });
   };
 
-  const revealCard = () => {
+  const confirmCards = () => {
     if (!socket || !room || !room.currentBattle) return;
-    socket.emit('reveal-cards', room.id);
+    socket.emit('confirm-cards', room.id);
   };
 
   const useSpecialCard = () => {
@@ -631,7 +631,7 @@ export default function GameBoard() {
 
         {room.currentBattle && isInBattle() && (
           <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', color: '#fde047' }}>
-            ⚔️ <strong>คลิกที่ไพ่ของคุณ 1-3 ใบ</strong> เพื่อวางลงในกระดาน
+            ⚔️ <strong>คลิกที่ไพ่ของคุณ 1-3 ใบ</strong> เพื่อวางลงในกระดาน แล้วกด <strong>ยืนยันการเปิดไพ่</strong> เมื่อพร้อม
           </Alert>
         )}
 
@@ -656,6 +656,9 @@ export default function GameBoard() {
           const oppRevealed = isP1 ? battle.player2CardsRevealed : battle.player1CardsRevealed;
           const myCardCount = myCards?.length || 0;
           const oppCardCount = oppCards?.length || 0;
+          const myConfirmed = isP1 ? battle.player1Confirmed : battle.player2Confirmed;
+          const oppConfirmed = isP1 ? battle.player2Confirmed : battle.player1Confirmed;
+          const bothConfirmed = battle.player1Confirmed && battle.player2Confirmed;
           const myAllRevealed = myRevealed?.every(r => r) ?? false;
 
           return (
@@ -694,7 +697,7 @@ export default function GameBoard() {
                         isRevealed={myRevealed?.[index] || false}
                         isMyCard={true}
                         onClick={
-                          myCards?.[index] && !myRevealed?.[index]
+                          myCards?.[index] && !myConfirmed
                             ? () => removeCard(index)
                             : undefined
                         }
@@ -711,20 +714,30 @@ export default function GameBoard() {
                   }}>
                     วางแล้ว {myCardCount}/3
                   </Box>
-                  {myCardCount >= 1 && !myAllRevealed && (
-                    <Box sx={{ mt: 1.5 }}>
+
+                  {/* ปุ่มยืนยัน / สถานะรอ */}
+                  <Box sx={{ mt: 1.5 }}>
+                    {!myConfirmed ? (
                       <Button
                         variant="contained"
-                        color="primary"
+                        color="warning"
                         size="small"
                         startIcon={<Visibility />}
-                        onClick={revealCard}
+                        onClick={confirmCards}
+                        disabled={myCardCount < 1 || bothConfirmed || myAllRevealed}
                         sx={{ fontWeight: 700 }}
                       >
-                        เปิดไพ่ทั้งหมด
+                        ✅ ยืนยันการเปิดไพ่
                       </Button>
-                    </Box>
-                  )}
+                    ) : (
+                      <Chip
+                        label="✅ ยืนยันแล้ว"
+                        color="success"
+                        size="small"
+                        sx={{ fontWeight: 700 }}
+                      />
+                    )}
+                  </Box>
                 </Box>
 
                 {/* VS */}
@@ -733,19 +746,37 @@ export default function GameBoard() {
                     VS
                   </Typography>
                   {/* Battle status hint */}
-                  <Box sx={{ mt: 1.5 }}>
-                    {myCardCount < 1 || oppCardCount < 1 ? (
-                      <Typography sx={{ fontSize: 11, color: '#475569', fontStyle: 'italic' }}>
-                        เลือกไพ่ 1-3 ใบ
-                      </Typography>
-                    ) : !myAllRevealed || !(oppRevealed?.every(r => r)) ? (
-                      <Typography sx={{ fontSize: 11, color: '#ca8a04', fontStyle: 'italic' }}>
-                        กดเปิดไพ่เพื่อตัดสิน
+                  <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                    {bothConfirmed || myAllRevealed ? (
+                      <Typography sx={{ fontSize: 11, color: '#22c55e', fontStyle: 'italic' }}>
+                        ⚔️ กำลังตัดสินผล...
                       </Typography>
                     ) : (
-                      <Typography sx={{ fontSize: 11, color: '#22c55e', fontStyle: 'italic' }}>
-                        กำลังตัดสินผล...
-                      </Typography>
+                      <>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          <Box sx={{
+                            width: 8, height: 8, borderRadius: '50%',
+                            bgcolor: myConfirmed ? '#22c55e' : '#475569'
+                          }} />
+                          <Typography sx={{ fontSize: 11, color: myConfirmed ? '#22c55e' : '#475569' }}>
+                            คุณ {myConfirmed ? '✅' : '⏳'}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          <Box sx={{
+                            width: 8, height: 8, borderRadius: '50%',
+                            bgcolor: oppConfirmed ? '#22c55e' : '#475569'
+                          }} />
+                          <Typography sx={{ fontSize: 11, color: oppConfirmed ? '#22c55e' : '#475569' }}>
+                            คู่แข่ง {oppConfirmed ? '✅' : '⏳'}
+                          </Typography>
+                        </Box>
+                        {!myConfirmed && myCardCount >= 1 && (
+                          <Typography sx={{ fontSize: 10, color: '#ca8a04', fontStyle: 'italic', mt: 0.5 }}>
+                            กดยืนยันเมื่อวางไพ่เสร็จแล้ว
+                          </Typography>
+                        )}
+                      </>
                     )}
                   </Box>
                 </Box>
@@ -772,13 +803,30 @@ export default function GameBoard() {
                   }}>
                     วางแล้ว {oppCardCount}/3
                   </Box>
+                  {/* สถานะ confirm ของฝ่ายตรงข้าม */}
+                  <Box sx={{ mt: 1.5 }}>
+                    {oppConfirmed ? (
+                      <Chip
+                        label="✅ ยืนยันแล้ว"
+                        color="success"
+                        size="small"
+                        sx={{ fontWeight: 700 }}
+                      />
+                    ) : (
+                      <Chip
+                        label="⏳ รอยืนยัน..."
+                        size="small"
+                        sx={{ fontWeight: 700, color: '#94a3b8', bgcolor: '#1e293b' }}
+                      />
+                    )}
+                  </Box>
                 </Box>
               </Box>
 
               {/* Arena footer hint */}
               <Box sx={{ bgcolor: 'rgba(15,23,42,0.5)', px: 3, py: 1.5, borderTop: '1px solid rgba(30,41,59,0.5)', textAlign: 'center' }}>
                 <Typography sx={{ fontSize: 12, color: '#475569', fontStyle: 'italic' }}>
-                  ℹ️ วางไพ่ดอกเดียวกันกับที่ได้รับ (สูงสุด 3 ใบ) — คลิกไพ่ที่วางแล้วเพื่อเอาคืน
+                  ℹ️ วางไพ่ดอกเดียวกันกับที่ได้รับ (สูงสุด 3 ใบ) — คลิกไพ่ที่วางแล้วเพื่อเอาคืน — กดยืนยันเมื่อวางไพ่เสร็จแล้ว
                 </Typography>
               </Box>
             </Box>

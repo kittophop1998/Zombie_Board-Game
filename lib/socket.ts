@@ -218,6 +218,13 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         return;
       }
 
+      // เช็คว่ายังไม่ได้ยืนยัน (confirm) — ถ้า confirm แล้วดึงไม่ได้
+      const myConfirmed = battle.player1Id === socket.id ? battle.player1Confirmed : battle.player2Confirmed;
+      if (myConfirmed) {
+        socket.emit('error', { message: 'ยืนยันแล้วไม่สามารถดึงไพ่กลับได้' });
+        return;
+      }
+
       // เช็คว่ายังไม่ได้เปิดไพ่
       const myCardsRevealed = battle.player1Id === socket.id ? battle.player1CardsRevealed : battle.player2CardsRevealed;
       if (myCardsRevealed.some(r => r)) {
@@ -383,6 +390,8 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         player2Cards: [],
         player1CardsRevealed: [],
         player2CardsRevealed: [],
+        player1Confirmed: false,
+        player2Confirmed: false,
         isComplete: false
       };
 
@@ -398,6 +407,66 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       io.to(data.roomId).emit('message', { 
         message: `${player.name} vs ${opponent.name} - เริ่มแบทเทิล!` 
       });
+    });
+
+    // ยืนยันพร้อมเปิดไพ่ (แทน reveal-cards เดิม)
+    socket.on('confirm-cards', (roomId: string) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      // หา battle ที่ผู้เล่นคนนี้อยู่
+      const battle = room.battles.find(b =>
+        (b.player1Id === socket.id || b.player2Id === socket.id) && !b.isComplete
+      );
+
+      if (!battle) return;
+
+      // เช็คว่าวางไพ่อย่างน้อย 1 ใบแล้ว
+      const myCards = battle.player1Id === socket.id ? battle.player1Cards : battle.player2Cards;
+      if (myCards.length === 0) {
+        socket.emit('error', { message: 'กรุณาวางไพ่อย่างน้อย 1 ใบก่อนยืนยัน' });
+        return;
+      }
+
+      // เช็คว่ายังไม่ได้ confirm แล้ว
+      const alreadyConfirmed = battle.player1Id === socket.id
+        ? battle.player1Confirmed
+        : battle.player2Confirmed;
+      if (alreadyConfirmed) {
+        socket.emit('error', { message: 'คุณยืนยันแล้ว รอฝ่ายตรงข้าม...' });
+        return;
+      }
+
+      const player = room.players.find(p => p.id === socket.id);
+
+      // บันทึกการยืนยัน
+      if (battle.player1Id === socket.id) {
+        battle.player1Confirmed = true;
+      } else {
+        battle.player2Confirmed = true;
+      }
+
+      // อัพเดท currentBattle
+      room.currentBattle = battle;
+      io.to(roomId).emit('room-updated', room);
+      io.to(roomId).emit('message', {
+        message: `${player?.name} ยืนยันการเปิดไพ่แล้ว!`
+      });
+
+      // ถ้าทั้งสองฝ่าย confirm แล้ว → reveal ทันทีและตัดสินผล
+      if (battle.player1Confirmed && battle.player2Confirmed) {
+        // เปิดไพ่ทั้งสองฝ่าย
+        battle.player1CardsRevealed = battle.player1Cards.map(() => true);
+        battle.player2CardsRevealed = battle.player2Cards.map(() => true);
+        room.currentBattle = battle;
+
+        io.to(roomId).emit('room-updated', room);
+        io.to(roomId).emit('message', { message: '⚔️ ทั้งสองฝ่ายยืนยันแล้ว! เปิดไพ่!' });
+
+        setTimeout(() => {
+          resolveBattle(room, battle, io);
+        }, 1000);
+      }
     });
 
     // ผู้เล่นเลือกการกระทำเมื่อยึดปืนได้ (ยึดปืนหรือยิงฝั่งตรงข้าม)
