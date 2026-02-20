@@ -175,114 +175,90 @@ export function determineBattleWinner(
   // คำนวณแต้ม
   const total1 = calculateTotalValue(cards1);
   const total2 = calculateTotalValue(cards2);
-  
-  // === กรณีที่ 2: ฝั่งมนุษย์ใช้ไพ่ปืน ===
-  
-  // 2.1 Player1 เป็นมนุษย์และใช้ปืน vs Player2 เป็นมนุษย์
-  if (hasShotgun1 && player1.status === PlayerStatus.HUMAN && player2.status === PlayerStatus.HUMAN) {
-    // 2.1.1 แต้มของคนใช้ปืนสูงกว่า -> ฝั่งตรงข้ามตาย
-    if (total1 > total2) {
-      return {
-        winnerId: player1.id,
-        isInfection: false,
-        eliminatedPlayerId: player2.id,
-        shotgunAction: 'kill_opponent'
-      };
+
+  // ======================================================
+  // === กรณีที่มีไพ่ปืน (ฝั่งใดฝั่งหนึ่ง หรือทั้งสอง) ===
+  // ======================================================
+  // ถ้ามีปืนอย่างน้อย 1 ฝั่ง: ฝั่งที่มีแต้มสูงกว่าจะได้สิทธิ์เลือก
+  // (ยึดปืน หรือ ยิงฝ่ายตรงข้ามทันที)
+  // ยกเว้น: ถ้าผู้วางปืนแต้มสูงกว่า จะยิงฝ่ายตรงข้ามตายทันทีแทน
+
+  if (hasShotgun1 || hasShotgun2) {
+    // --- กรณี: Player1 วางปืน ---
+    if (hasShotgun1 && !hasShotgun2) {
+      if (total1 > total2) {
+        // คนวางปืน (p1) แต้มสูงกว่า → ฝ่ายตรงข้ามตายทันที
+        return {
+          winnerId: player1.id,
+          isInfection: false,
+          eliminatedPlayerId: player2.id,
+          shotgunAction: 'kill_opponent'
+        };
+      } else if (total1 < total2) {
+        // คนวางปืน (p1) แต้มน้อยกว่า → อีกฝั่ง (p2) เลือกได้
+        return {
+          winnerId: player2.id,
+          isInfection: false,
+          shotgunAction: 'pending_choice',
+          needsPlayerChoice: true,
+          chooserId: player2.id,
+          loserId: player1.id
+        };
+      }
+      // เสมอ
+      return { winnerId: null, isInfection: false };
     }
-    // 2.1.2 แต้มของคนใช้ปืนน้อยกว่า -> ฝั่งตรงข้ามเลือกได้ (ยึดปืนหรือยิงกลับ)
-    // *** ผู้เล่นต้องเลือก: 1) ยึดปืนมาใช้เอง หรือ 2) ยิงฝั่งตรงข้ามให้ตาย ***
-    else if (total1 < total2) {
-      return {
-        winnerId: player2.id,
-        isInfection: false,
-        shotgunAction: 'pending_choice', // รอการเลือกจากผู้เล่น
-        needsPlayerChoice: true,
-        chooserId: player2.id,
-        loserId: player1.id
-      };
+
+    // --- กรณี: Player2 วางปืน ---
+    if (hasShotgun2 && !hasShotgun1) {
+      if (total2 > total1) {
+        // คนวางปืน (p2) แต้มสูงกว่า → ฝ่ายตรงข้ามตายทันที
+        return {
+          winnerId: player2.id,
+          isInfection: false,
+          eliminatedPlayerId: player1.id,
+          shotgunAction: 'kill_opponent'
+        };
+      } else if (total2 < total1) {
+        // คนวางปืน (p2) แต้มน้อยกว่า → อีกฝั่ง (p1) เลือกได้
+        return {
+          winnerId: player1.id,
+          isInfection: false,
+          shotgunAction: 'pending_choice',
+          needsPlayerChoice: true,
+          chooserId: player1.id,
+          loserId: player2.id
+        };
+      }
+      // เสมอ
+      return { winnerId: null, isInfection: false };
     }
-    // เสมอ
-    return { winnerId: null, isInfection: false };
+
+    // --- กรณี: ทั้งสองวางปืน → นับแต้มปกติ ฝ่ายชนะยิงอีกฝ่ายตายทันที ---
+    if (hasShotgun1 && hasShotgun2) {
+      if (total1 > total2) {
+        return {
+          winnerId: player1.id,
+          isInfection: false,
+          eliminatedPlayerId: player2.id,
+          shotgunAction: 'kill_opponent'
+        };
+      } else if (total2 > total1) {
+        return {
+          winnerId: player2.id,
+          isInfection: false,
+          eliminatedPlayerId: player1.id,
+          shotgunAction: 'kill_opponent'
+        };
+      }
+      // เสมอ — ไม่มีผู้ชนะ
+      return { winnerId: null, isInfection: false };
+    }
   }
-  
-  // Player2 เป็นมนุษย์และใช้ปืน vs Player1 เป็นมนุษย์
-  if (hasShotgun2 && player2.status === PlayerStatus.HUMAN && player1.status === PlayerStatus.HUMAN) {
-    // 2.1.1 แต้มของคนใช้ปืนสูงกว่า -> ฝั่งตรงข้ามตาย
-    if (total2 > total1) {
-      return {
-        winnerId: player2.id,
-        isInfection: false,
-        eliminatedPlayerId: player1.id,
-        shotgunAction: 'kill_opponent'
-      };
-    }
-    // 2.1.2 แต้มของคนใช้ปืนน้อยกว่า -> ฝั่งตรงข้ามเลือกได้
-    else if (total2 < total1) {
-      return {
-        winnerId: player1.id,
-        isInfection: false,
-        shotgunAction: 'pending_choice',
-        needsPlayerChoice: true,
-        chooserId: player1.id,
-        loserId: player2.id
-      };
-    }
-    // เสมอ
-    return { winnerId: null, isInfection: false };
-  }
-  
-  // 2.2 มนุษย์ใช้ปืน vs ซอมบี้
-  // Player1 เป็นมนุษย์ใช้ปืน vs Player2 เป็นซอมบี้
-  if (hasShotgun1 && player1.status === PlayerStatus.HUMAN && player2.status === PlayerStatus.ZOMBIE) {
-    // 2.2.1 แต้มมนุษย์สูงกว่า -> ซอมบี้ตาย
-    if (total1 > total2) {
-      return {
-        winnerId: player1.id,
-        isInfection: false,
-        eliminatedPlayerId: player2.id,
-        shotgunAction: 'kill_opponent'
-      };
-    }
-    // 2.2.2 แต้มมนุษย์น้อยกว่า -> ถูกแพร่เชื้อ
-    else if (total1 < total2) {
-      return {
-        winnerId: player2.id,
-        isInfection: true,
-        infectedPlayerId: player1.id,
-        zombiePlayerId: player2.id,
-        zombieCardReturned: hasZombieCard2 // ถ้าซอมบี้ลงไพ่ซอมบี้ ให้คืนกลับ
-      };
-    }
-    // เสมอ
-    return { winnerId: null, isInfection: false };
-  }
-  
-  // Player2 เป็นมนุษย์ใช้ปืน vs Player1 เป็นซอมบี้
-  if (hasShotgun2 && player2.status === PlayerStatus.HUMAN && player1.status === PlayerStatus.ZOMBIE) {
-    // 2.2.1 แต้มมนุษย์สูงกว่า -> ซอมบี้ตาย
-    if (total2 > total1) {
-      return {
-        winnerId: player2.id,
-        isInfection: false,
-        eliminatedPlayerId: player1.id,
-        shotgunAction: 'kill_opponent'
-      };
-    }
-    // 2.2.2 แต้มมนุษย์น้อยกว่า -> ถูกแพร่เชื้อ
-    else if (total2 < total1) {
-      return {
-        winnerId: player1.id,
-        isInfection: true,
-        infectedPlayerId: player2.id,
-        zombiePlayerId: player1.id,
-        zombieCardReturned: hasZombieCard1
-      };
-    }
-    // เสมอ
-    return { winnerId: null, isInfection: false };
-  }
-  
-  // === กรณีที่ 3: ซอมบี้ใช้ไพ่ซอมบี้ ===
+
+  // ======================================================
+  // === กรณีที่ 3: ซอมบี้ใช้ไพ่ซอมบี้ (ไม่มีปืน) ===
+  // ======================================================
   
   // Player1 เป็นซอมบี้และวางไพ่ซอมบี้
   if (hasZombieCard1 && player1.status === PlayerStatus.ZOMBIE) {

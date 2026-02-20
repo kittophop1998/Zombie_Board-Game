@@ -1,6 +1,6 @@
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
-import { GameRoom, Player, Battle, CardType, PlayerStatus } from '../types/game';
+import { GameRoom, Player, Battle, Card, CardType, PlayerStatus } from '../types/game';
 import { 
   dealCards, 
   distributeSpecialCards, 
@@ -583,27 +583,35 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
       player2Id: player2.id
     });
     
+    // หาไพ่ปืนจากไพ่ที่วาง (ของฝ่ายแพ้) หรือจาก hand ของฝ่ายแพ้ หรือสร้าง synthetic
     const loserBattleCards = result.loserId === player1.id ? battle.player1Cards : battle.player2Cards;
-    console.log('🃏 Loser battle cards:', loserBattleCards.map(c => ({ id: c.id, type: c.type })));
-    
-    const shotgunCard = loserBattleCards.find(c => c.type === CardType.SHOTGUN);
-    console.log('🔫 Found shotgun card:', shotgunCard ? 'YES' : 'NO');
-    
-    if (shotgunCard) {
-      battle.pendingShotgunChoice = {
-        chooserId: result.chooserId,
-        loserId: result.loserId,
-        shotgunCard: shotgunCard
-      };
-      
-      const chooser = room.players.find(p => p.id === result.chooserId);
-      const loser = room.players.find(p => p.id === result.loserId);
-      
-      io.to(room.id).emit('message', { 
-        message: `${winnerId === player1.id ? player1.name : player2.name} ชนะ! (${total1} vs ${total2})` 
-      });
-      
-      io.to(room.id).emit('room-updated', room);
+    const loser = room.players.find(p => p.id === result.loserId);
+    const chooser = room.players.find(p => p.id === result.chooserId);
+
+    const shotgunCard =
+      loserBattleCards.find(c => c.type === CardType.SHOTGUN) ??
+      loser?.cards.find(c => c.type === CardType.SHOTGUN) ??
+      { id: `shotgun-synthetic-${Date.now()}`, type: CardType.SHOTGUN };
+
+    console.log('🔫 Shotgun card used:', shotgunCard);
+
+    battle.pendingShotgunChoice = {
+      chooserId: result.chooserId,
+      loserId: result.loserId,
+      shotgunCard: shotgunCard as Card
+    };
+
+    // อัพเดท currentBattle ให้ชี้ไปที่ battle ที่รอ pending choice นี้
+    room.currentBattle = battle;
+
+    io.to(room.id).emit('message', {
+      message: `${chooser?.name} ชนะ! (${total1} vs ${total2}) — รอการเลือกการกระทำของไพ่ปืน`
+    });
+
+    io.to(room.id).emit('room-updated', room);
+
+    // หน่วงเวลาเล็กน้อยให้ client รับ room-updated ก่อนแล้วค่อย emit shotgun-choice-required
+    setTimeout(() => {
       io.to(room.id).emit('shotgun-choice-required', {
         battleId: battle.id,
         chooserId: result.chooserId,
@@ -611,9 +619,9 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
         loserId: result.loserId,
         loserName: loser?.name
       });
-      
-      return; // รอการเลือกจากผู้เล่น
-    }
+    }, 300);
+
+    return; // รอการเลือกจากผู้เล่น
   }
   
   // === จัดการกรณีพิเศษต่างๆ ===

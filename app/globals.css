@@ -8,8 +8,9 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0f172a;
   font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  color: #f1f5f9;
 }
 
 html {

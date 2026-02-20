@@ -10,7 +10,6 @@ import {
   PlayerStatus 
 } from '../types/game';
 import {
-  Container,
   Box,
   Typography,
   Button,
@@ -19,23 +18,22 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Paper,
   Stack,
   Chip,
   Alert,
   Snackbar,
   LinearProgress,
-  Divider
 } from '@mui/material';
 import {
   Add,
   Login,
   ContentCopy,
   PlayArrow,
-  Visibility
+  Visibility,
+  AccessTime,
+  Shield,
 } from '@mui/icons-material';
 import CardComponent from './CardComponent';
-import PlayerCard from './PlayerCard';
 import BattleCard from './BattleCard';
 import ShotgunChoiceModal from './ShotgunChoiceModal';
 
@@ -325,17 +323,32 @@ export default function GameBoard() {
   // Lobby view
   if (!room) {
     return (
-      <Container maxWidth="md" sx={{ mt: 8 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography variant="h3" gutterBottom align="center" sx={{ mb: 4 }}>
-            🧟 Zombie Card Game
+      <Box sx={{ minHeight: '100vh', bgcolor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+        <Box sx={{ maxWidth: 440, width: '100%', bgcolor: '#1e293b', borderRadius: 4, p: 4, border: '1px solid #334155', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', textAlign: 'center' }}>
+          {/* Logo */}
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
+            <Box sx={{ position: 'relative' }}>
+              <Box sx={{ fontSize: 80, lineHeight: 1 }}>🧟</Box>
+              <Box sx={{
+                position: 'absolute', top: -4, right: -4,
+                bgcolor: '#dc2626', borderRadius: '50%', p: 0.5,
+                border: '2px solid #1e293b',
+                fontSize: 20, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 32, height: 32
+              }}>
+                🔫
+              </Box>
+            </Box>
+          </Box>
+
+          <Typography variant="h3" sx={{ fontWeight: 900, color: '#f1f5f9', mb: 0.5, letterSpacing: '-1px', fontStyle: 'italic' }}>
+            ZOMBIE CARD GAME
           </Typography>
-          
-          <Typography variant="body1" gutterBottom align="center" color="text.secondary" sx={{ mb: 4 }}>
-            เกมการ์ดซอมบี้ - เล่นผ่าน Local Network
+          <Typography sx={{ color: '#64748b', mb: 4, fontStyle: 'italic', fontSize: 14 }}>
+            &quot;รอดชีวิต หรือ กลายเป็นพวกมัน&quot;
           </Typography>
 
-          {!connected && <LinearProgress sx={{ mb: 2 }} />}
+          {!connected && <LinearProgress sx={{ mb: 2, borderRadius: 2 }} />}
 
           <Stack spacing={2}>
             <Button
@@ -345,26 +358,28 @@ export default function GameBoard() {
               onClick={() => setShowCreateDialog(true)}
               disabled={!connected}
               fullWidth
+              sx={{ py: 1.75, bgcolor: '#2563eb', '&:hover': { bgcolor: '#3b82f6' }, boxShadow: '0 8px 24px rgba(37,99,235,0.4)' }}
             >
               สร้างห้องใหม่
             </Button>
-            
+
             <Button
-              variant="outlined"
+              variant="contained"
               size="large"
               startIcon={<Login />}
               onClick={() => setShowJoinDialog(true)}
               disabled={!connected}
               fullWidth
+              sx={{ py: 1.75, bgcolor: '#334155', '&:hover': { bgcolor: '#475569' } }}
             >
               เข้าร่วมห้อง
             </Button>
           </Stack>
-        </Paper>
+        </Box>
 
         {/* Create Room Dialog */}
-        <Dialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)}>
-          <DialogTitle>สร้างห้องใหม่</DialogTitle>
+        <Dialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} PaperProps={{ sx: { minWidth: 360 } }}>
+          <DialogTitle sx={{ fontWeight: 700 }}>สร้างห้องใหม่</DialogTitle>
           <DialogContent>
             <TextField
               autoFocus
@@ -373,17 +388,18 @@ export default function GameBoard() {
               fullWidth
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && createRoom()}
             />
           </DialogContent>
-          <DialogActions>
+          <DialogActions sx={{ p: 2, pt: 0 }}>
             <Button onClick={() => setShowCreateDialog(false)}>ยกเลิก</Button>
             <Button onClick={createRoom} variant="contained">สร้างห้อง</Button>
           </DialogActions>
         </Dialog>
 
         {/* Join Room Dialog */}
-        <Dialog open={showJoinDialog} onClose={() => setShowJoinDialog(false)}>
-          <DialogTitle>เข้าร่วมห้อง</DialogTitle>
+        <Dialog open={showJoinDialog} onClose={() => setShowJoinDialog(false)} PaperProps={{ sx: { minWidth: 360 } }}>
+          <DialogTitle sx={{ fontWeight: 700 }}>เข้าร่วมห้อง</DialogTitle>
           <DialogContent>
             <TextField
               margin="dense"
@@ -391,7 +407,7 @@ export default function GameBoard() {
               fullWidth
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              sx={{ mb: 2 }}
+              sx={{ mb: 1 }}
             />
             <TextField
               margin="dense"
@@ -399,380 +415,524 @@ export default function GameBoard() {
               fullWidth
               value={roomIdInput}
               onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === 'Enter' && joinRoom()}
             />
           </DialogContent>
-          <DialogActions>
+          <DialogActions sx={{ p: 2, pt: 0 }}>
             <Button onClick={() => setShowJoinDialog(false)}>ยกเลิก</Button>
             <Button onClick={joinRoom} variant="contained">เข้าร่วม</Button>
           </DialogActions>
         </Dialog>
 
-        <Snackbar 
-          open={!!message} 
-          autoHideDuration={3000} 
-          onClose={() => setMessage('')}
-        >
+        <Snackbar open={!!message} autoHideDuration={3000} onClose={() => setMessage('')}>
           <Alert severity="success">{message}</Alert>
         </Snackbar>
-
-        <Snackbar 
-          open={!!error} 
-          autoHideDuration={3000} 
-          onClose={() => setError('')}
-        >
+        <Snackbar open={!!error} autoHideDuration={3000} onClose={() => setError('')}>
           <Alert severity="error">{error}</Alert>
         </Snackbar>
-      </Container>
+      </Box>
     );
   }
 
-  // Game view
-  return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
-      <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center" justifyContent="space-between">
-          <Box>
-            <Typography variant="h5">
-              ห้อง: {room.id}
+  // ======= LOBBY VIEW (room exists but game not started) =======
+  if (!room.gameStarted) {
+    return (
+      <Box sx={{ minHeight: '100vh', bgcolor: '#0f172a', p: { xs: 2, sm: 4 } }}>
+        <Box sx={{ maxWidth: 900, mx: 'auto' }}>
+
+          {/* Header bar */}
+          <Box sx={{
+            bgcolor: '#1e293b', borderRadius: 3, p: 3, mb: 3,
+            border: '1px solid #334155', boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+            display: 'flex', flexDirection: { xs: 'column', md: 'row' },
+            alignItems: { xs: 'stretch', md: 'center' },
+            justifyContent: 'space-between', gap: 2
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ p: 1.5, bgcolor: '#0f172a', borderRadius: 2, border: '1px solid #334155' }}>
+                <Typography sx={{ color: '#64748b', fontSize: 12, lineHeight: 1.2 }}>รหัสห้อง</Typography>
+                <Typography sx={{ color: '#f1f5f9', fontSize: 22, fontFamily: 'monospace', fontWeight: 700, lineHeight: 1.2 }}>
+                  {room.id}
+                </Typography>
+              </Box>
               <Button
                 size="small"
-                startIcon={<ContentCopy />}
                 onClick={copyRoomId}
-                sx={{ ml: 2 }}
+                sx={{ p: 1.5, minWidth: 0, bgcolor: '#334155', color: '#60a5fa', '&:hover': { bgcolor: '#475569' }, borderRadius: 2 }}
               >
-                คัดลอก
+                <ContentCopy fontSize="small" />
               </Button>
-            </Typography>
-          </Box>
-          
-          {/* แสดงเวลาถอยหลังแทนจำนวนมนุษย์/ซอมบี้ */}
-          {room.gameStarted && !room.gameEnded && timeRemaining !== null && (
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ 
-                color: timeRemaining < 60000 ? '#e74c3c' : '#2ecc71',
-                fontWeight: 'bold',
-                fontFamily: 'monospace'
-              }}>
-                ⏱️ {formatTime(timeRemaining)}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                เวลาที่เหลือ
-              </Typography>
             </Box>
-          )}
-          
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+                <Typography sx={{ color: '#64748b', fontSize: 12 }}>สถานะผู้เล่น</Typography>
+                <Typography sx={{ color: '#f1f5f9', fontWeight: 700 }}>
+                  {room.players.filter(p => p.isReady).length} / {room.players.length} พร้อมแล้ว
+                </Typography>
+              </Box>
+              {myPlayer && !myPlayer.isReady ? (
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<PlayArrow />}
+                  onClick={setReady}
+                  sx={{ px: 4, py: 1.5, fontWeight: 700, boxShadow: '0 8px 24px rgba(34,197,94,0.25)' }}
+                >
+                  พร้อมเล่น
+                </Button>
+              ) : (
+                <Chip label="รอผู้เล่นอื่น..." color="warning" sx={{ fontWeight: 700, px: 1 }} />
+              )}
+            </Box>
+          </Box>
+
+          {/* Player grid */}
+          <Box sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+            gap: 3
+          }}>
+            {room.players.map((player) => {
+              const isMe = player.id === myPlayerId;
+              return (
+                <Box key={player.id} sx={{
+                  bgcolor: '#1e293b',
+                  borderRadius: 3,
+                  p: 3,
+                  border: isMe ? '2px solid #3b82f6' : '2px solid #334155',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  transition: 'all 0.2s',
+                }}>
+                  <Box sx={{ position: 'relative' }}>
+                    <Box sx={{
+                      width: 72, height: 72, bgcolor: '#0f172a', borderRadius: '50%',
+                      border: '2px solid #334155',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 32
+                    }}>
+                      🧑
+                    </Box>
+                    {isMe && (
+                      <Box sx={{
+                        position: 'absolute', bottom: -4, right: -4,
+                        bgcolor: '#2563eb', color: '#fff', fontSize: 10,
+                        px: 0.75, py: 0.25, borderRadius: 10, fontWeight: 700, lineHeight: 1.4
+                      }}>ME</Box>
+                    )}
+                  </Box>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography sx={{ fontWeight: 700, fontSize: 18, color: '#f1f5f9' }}>
+                      {player.name}{isMe ? ' (คุณ)' : ''}
+                    </Typography>
+                    <Typography sx={{ color: '#64748b', fontSize: 13 }}>
+                      {player.isReady ? '✅ พร้อมแล้ว' : 'รอกดพร้อม...'}
+                    </Typography>
+                  </Box>
+                  {/* card back indicators */}
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    {Array.from({ length: Math.max(player.cards.length, 7) }).map((_, j) => (
+                      <Box key={j} sx={{
+                        width: 8, height: 12, borderRadius: 0.5,
+                        bgcolor: j < player.cards.length ? '#3b82f6' : '#334155'
+                      }} />
+                    ))}
+                  </Box>
+                </Box>
+              );
+            })}
+
+            {/* Empty slot placeholder */}
+            {room.players.length < 6 && (
+              <Box sx={{
+                bgcolor: 'rgba(15,23,42,0.5)', borderRadius: 3, p: 3,
+                border: '2px dashed #1e293b',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#334155', fontStyle: 'italic', minHeight: 180
+              }}>
+                รอผู้เล่นเข้าร่วม...
+              </Box>
+            )}
+          </Box>
+        </Box>
+
+        <Snackbar open={!!message} autoHideDuration={3000} onClose={() => setMessage('')}>
+          <Alert severity="success">{message}</Alert>
+        </Snackbar>
+        <Snackbar open={!!error} autoHideDuration={3000} onClose={() => setError('')}>
+          <Alert severity="error">{error}</Alert>
+        </Snackbar>
+
+        {/* ── Shotgun Choice Modal — ต้องอยู่ทุก view เพื่อไม่ให้หายเมื่อ state เปลี่ยน ── */}
+        <ShotgunChoiceModal
+          isOpen={showShotgunChoice && shotgunChoiceData?.chooserId === myPlayerId}
+          battleId={shotgunChoiceData?.battleId || ''}
+          chooserName={shotgunChoiceData?.chooserName || ''}
+          loserName={shotgunChoiceData?.loserName || ''}
+          onChoose={handleShotgunChoice}
+        />
+      </Box>
+    );
+  }
+
+  // ======= GAME VIEW =======
+  return (
+    <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#f1f5f9', pb: { xs: 12, md: 4 } }}>
+
+      {/* ── Sticky Top Bar ── */}
+      <Box sx={{
+        bgcolor: 'rgba(15,23,42,0.85)',
+        backdropFilter: 'blur(12px)',
+        position: 'sticky', top: 0, zIndex: 100,
+        borderBottom: '1px solid #1e293b',
+        px: 3, py: 1.5
+      }}>
+        <Box sx={{ maxWidth: 1100, mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{
+              bgcolor: '#1e293b', px: 1.5, py: 0.5, borderRadius: 1.5,
+              fontFamily: 'monospace', fontSize: 14, border: '1px solid #334155', color: '#94a3b8'
+            }}>
+              {room.id}
+            </Box>
+            <Button size="small" onClick={copyRoomId} sx={{ minWidth: 0, p: 0.75, color: '#60a5fa' }}>
+              <ContentCopy sx={{ fontSize: 16 }} />
+            </Button>
+            {room.gameStarted && !room.gameEnded && timeRemaining !== null && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: timeRemaining < 60000 ? '#ef4444' : '#eab308' }}>
+                <AccessTime sx={{ fontSize: 18 }} />
+                <Typography sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 16 }}>
+                  {formatTime(timeRemaining)}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+
           <Box>
-            {!room.gameStarted && myPlayer && !myPlayer.isReady && (
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<PlayArrow />}
-                onClick={setReady}
-              >
-                พร้อมเล่น
-              </Button>
-            )}
-            {!room.gameStarted && myPlayer?.isReady && (
-              <Chip label="รอผู้เล่นอื่น..." color="warning" />
-            )}
             {room.gameEnded && (
-              <Chip 
-                label={`${room.winningTeam === 'HUMAN' ? 'มนุษย์ชนะ!' : 'ซอมบี้ชนะ!'}`}
+              <Chip
+                label={room.winningTeam === 'HUMAN' ? '🏆 มนุษย์ชนะ!' : '🧟 ซอมบี้ชนะ!'}
                 color={room.winningTeam === 'HUMAN' ? 'primary' : 'success'}
+                sx={{ fontWeight: 700 }}
               />
             )}
           </Box>
-        </Stack>
-      </Paper>
-
-      {/* Battle Status Alert */}
-      {!room.currentBattle && room.gameStarted && !room.gameEnded && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <Typography variant="body1">
-            💡 <strong>คลิกที่การ์ดผู้เล่นคนอื่น</strong> เพื่อเริ่มแบทเทิล
-          </Typography>
-        </Alert>
-      )}
-
-      {room.currentBattle && (room.currentBattle.player1Id === myPlayerId || room.currentBattle.player2Id === myPlayerId) && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <Typography variant="body1">
-            ⚔️ <strong>คลิกที่ไพ่ของคุณ 1-3 ใบ</strong> เพื่อวางลงในกระดาน (ขั้นต่ำ 1 ใบ)
-          </Typography>
-        </Alert>
-      )}
-
-      {room.currentBattle && room.currentBattle.player1Id !== myPlayerId && room.currentBattle.player2Id !== myPlayerId && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <Typography variant="body1">
-            👀 <strong>{room.players.find(p => p.id === room.currentBattle?.player1Id)?.name}</strong> vs <strong>{room.players.find(p => p.id === room.currentBattle?.player2Id)?.name}</strong> กำลังแบทเทิลกัน
-          </Typography>
-        </Alert>
-      )}
-
-      {/* Current Battle - แสดงเฉพาะคนที่เกี่ยวข้อง */}
-      {room.currentBattle && (room.currentBattle.player1Id === myPlayerId || room.currentBattle.player2Id === myPlayerId) && (
-        <Paper elevation={3} sx={{ p: 3, mb: 3, bgcolor: '#fff3e0' }}>
-          <Typography variant="h6" gutterBottom>
-            ⚔️ การแบทเทิลกำลังดำเนินการ
-          </Typography>
-          
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-around', 
-            alignItems: 'flex-start',
-            gap: 4,
-            my: 3 
-          }}>
-            {/* Player 1 Cards */}
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="subtitle1" gutterBottom fontWeight="bold">
-                {room.players.find(p => p.id === room.currentBattle?.player1Id)?.name}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
-                {[0, 1, 2].map(index => (
-                  <BattleCard
-                    key={`p1-${index}`}
-                    card={room.currentBattle!.player1Cards?.[index]}
-                    isRevealed={room.currentBattle!.player1CardsRevealed?.[index] || false}
-                    isMyCard={room.currentBattle!.player1Id === myPlayerId}
-                    onClick={
-                      room.currentBattle!.player1Id === myPlayerId &&
-                      room.currentBattle!.player1Cards?.[index] &&
-                      !(room.currentBattle!.player1CardsRevealed?.[index])
-                        ? () => removeCard(index)
-                        : undefined
-                    }
-                  />
-                ))}
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                วางแล้ว: {room.currentBattle.player1Cards?.length || 0}/3
-              </Typography>
-              {room.currentBattle.player1Id === myPlayerId && 
-               (room.currentBattle.player1Cards?.length || 0) >= 1 && 
-               !(room.currentBattle.player1CardsRevealed?.every(r => r)) && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<Visibility />}
-                  onClick={revealCard}
-                  sx={{ mt: 2 }}
-                >
-                  เปิดไพ่ทั้งหมด
-                </Button>
-              )}
-            </Box>
-
-            <Typography variant="h4" sx={{ color: '#e74c3c', alignSelf: 'center' }}>
-              VS
-            </Typography>
-
-            {/* Player 2 Cards */}
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="subtitle1" gutterBottom fontWeight="bold">
-                {room.players.find(p => p.id === room.currentBattle?.player2Id)?.name}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
-                {[0, 1, 2].map(index => (
-                  <BattleCard
-                    key={`p2-${index}`}
-                    card={room.currentBattle!.player2Cards?.[index]}
-                    isRevealed={room.currentBattle!.player2CardsRevealed?.[index] || false}
-                    isMyCard={room.currentBattle!.player2Id === myPlayerId}
-                    onClick={
-                      room.currentBattle!.player2Id === myPlayerId &&
-                      room.currentBattle!.player2Cards?.[index] &&
-                      !(room.currentBattle!.player2CardsRevealed?.[index])
-                        ? () => removeCard(index)
-                        : undefined
-                    }
-                  />
-                ))}
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                วางแล้ว: {room.currentBattle.player2Cards?.length || 0}/3
-              </Typography>
-              {room.currentBattle.player2Id === myPlayerId && 
-               (room.currentBattle.player2Cards?.length || 0) >= 1 && 
-               !(room.currentBattle.player2CardsRevealed?.every(r => r)) && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<Visibility />}
-                  onClick={revealCard}
-                  sx={{ mt: 2 }}
-                >
-                  เปิดไพ่ทั้งหมด
-                </Button>
-              )}
-            </Box>
-          </Box>
-          
-          {/* Battle Status */}
-          <Box sx={{ textAlign: 'center', mt: 2 }}>
-            {(room.currentBattle.player1Cards?.length || 0) < 1 || (room.currentBattle.player2Cards?.length || 0) < 1 ? (
-              <Alert severity="info">
-                {room.currentBattle.player1Id === myPlayerId || room.currentBattle.player2Id === myPlayerId
-                  ? `เลือกไพ่ 1-3 ใบจากมือของคุณ (ขั้นต่ำ 1 ใบ)`
-                  : 'รอผู้เล่นวางไพ่...'}
-              </Alert>
-            ) : !(room.currentBattle.player1CardsRevealed?.every(r => r)) || !(room.currentBattle.player2CardsRevealed?.every(r => r)) ? (
-              <Alert severity="warning">ทั้งสองฝ่ายวางไพ่แล้ว! คลิกปุ่ม &quot;เปิดไพ่ทั้งหมด&quot; เพื่อเปิดไพ่</Alert>
-            ) : (
-              <Alert severity="success">กำลังตัดสินผล...</Alert>
-            )}
-          </Box>
-        </Paper>
-      )}
-
-      {/* Players */}
-      <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          ผู้เล่น ({room.players.length})
-        </Typography>
-        <Box sx={{ 
-          display: 'grid', 
-          gridTemplateColumns: { 
-            xs: '1fr', 
-            sm: 'repeat(2, 1fr)', 
-            md: 'repeat(3, 1fr)', 
-            lg: 'repeat(4, 1fr)' 
-          }, 
-          gap: 2 
-        }}>
-          {room.players.map(player => (
-            <PlayerCard
-              key={player.id}
-              player={player}
-              isCurrentPlayer={player.id === myPlayerId}
-              showStatus={player.id === myPlayerId}
-              onSelect={
-                room.gameStarted && !room.gameEnded && !room.currentBattle && player.id !== myPlayerId
-                  ? () => {
-                      setSelectedOpponent(player);
-                      setShowBattleDialog(true);
-                    }
-                  : undefined
-              }
-            />
-          ))}
         </Box>
-      </Paper>
+      </Box>
 
-      {/* My Cards */}
-      {myPlayer && room.gameStarted && (
-        <Paper elevation={3} sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            ไพ่ของคุณ ({myPlayer.cards.length})
+      <Box sx={{ maxWidth: 1100, mx: 'auto', p: { xs: 2, sm: 3 } }}>
+
+        {/* ── Status Alerts ── */}
+        {!room.currentBattle && !room.gameEnded && (
+          <Alert severity="info" sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd' }}>
+            💡 <strong>คลิกที่ผู้เล่นคนอื่น</strong> เพื่อเริ่มแบทเทิล
+          </Alert>
+        )}
+
+        {room.currentBattle && isInBattle() && (
+          <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', color: '#fde047' }}>
+            ⚔️ <strong>คลิกที่ไพ่ของคุณ 1-3 ใบ</strong> เพื่อวางลงในกระดาน
+          </Alert>
+        )}
+
+        {room.currentBattle && !isInBattle() && (
+          <Alert severity="info" sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd' }}>
+            👀 <strong>{room.players.find(p => p.id === room.currentBattle?.player1Id)?.name}</strong>
+            {' vs '}
+            <strong>{room.players.find(p => p.id === room.currentBattle?.player2Id)?.name}</strong>
+            {' กำลังแบทเทิลกัน'}
+          </Alert>
+        )}
+
+        {/* ── Battle Arena ── */}
+        {room.currentBattle && isInBattle() && (() => {
+          const battle = room.currentBattle!;
+          const p1 = room.players.find(p => p.id === battle.player1Id);
+          const p2 = room.players.find(p => p.id === battle.player2Id);
+          const isP1 = battle.player1Id === myPlayerId;
+          const myCards = isP1 ? battle.player1Cards : battle.player2Cards;
+          const myRevealed = isP1 ? battle.player1CardsRevealed : battle.player2CardsRevealed;
+          const oppCards = isP1 ? battle.player2Cards : battle.player1Cards;
+          const oppRevealed = isP1 ? battle.player2CardsRevealed : battle.player1CardsRevealed;
+          const myCardCount = myCards?.length || 0;
+          const oppCardCount = oppCards?.length || 0;
+          const myAllRevealed = myRevealed?.every(r => r) ?? false;
+
+          return (
+            <Box sx={{
+              bgcolor: '#0f172a', border: '1px solid #1e293b',
+              borderRadius: 4, overflow: 'hidden', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', mb: 4
+            }}>
+              {/* Arena header */}
+              <Box sx={{
+                background: 'linear-gradient(90deg, rgba(127,29,29,0.2) 0%, #0f172a 50%, rgba(30,58,138,0.2) 100%)',
+                px: 3, py: 1.5, borderBottom: '1px solid #1e293b',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#64748b', fontSize: 14 }}>
+                  <Shield sx={{ fontSize: 18 }} />
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>การประลองกำลังดำเนินการ</Typography>
+                </Box>
+                <Typography sx={{ fontSize: 11, bgcolor: '#1e293b', px: 1.5, py: 0.5, borderRadius: 1, color: '#475569', letterSpacing: 2, textTransform: 'uppercase' }}>
+                  Battle Table
+                </Typography>
+              </Box>
+
+              {/* Arena body */}
+              <Box sx={{
+                p: { xs: 3, md: 5 },
+                display: 'flex', flexDirection: { xs: 'column', md: 'row' },
+                alignItems: 'center', justifyContent: 'space-around', gap: 4
+              }}>
+                {/* My side */}
+                <Box sx={{ textAlign: 'center' }}>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
+                    {[0, 1, 2].map(index => (
+                      <BattleCard
+                        key={`my-${index}`}
+                        card={myCards?.[index]}
+                        isRevealed={myRevealed?.[index] || false}
+                        isMyCard={true}
+                        onClick={
+                          myCards?.[index] && !myRevealed?.[index]
+                            ? () => removeCard(index)
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </Box>
+                  <Typography sx={{ fontWeight: 700, fontSize: 16, color: '#f1f5f9', mb: 0.5 }}>
+                    {myPlayer?.name} (คุณ)
+                  </Typography>
+                  <Box sx={{
+                    display: 'inline-block', bgcolor: 'rgba(37,99,235,0.15)',
+                    color: '#60a5fa', fontSize: 11, px: 1.5, py: 0.25,
+                    borderRadius: 10, border: '1px solid rgba(37,99,235,0.3)'
+                  }}>
+                    วางแล้ว {myCardCount}/3
+                  </Box>
+                  {myCardCount >= 1 && !myAllRevealed && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        startIcon={<Visibility />}
+                        onClick={revealCard}
+                        sx={{ fontWeight: 700 }}
+                      >
+                        เปิดไพ่ทั้งหมด
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
+
+                {/* VS */}
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography sx={{ fontSize: 48, fontWeight: 900, fontStyle: 'italic', color: '#1e293b', userSelect: 'none', lineHeight: 1 }}>
+                    VS
+                  </Typography>
+                  {/* Battle status hint */}
+                  <Box sx={{ mt: 1.5 }}>
+                    {myCardCount < 1 || oppCardCount < 1 ? (
+                      <Typography sx={{ fontSize: 11, color: '#475569', fontStyle: 'italic' }}>
+                        เลือกไพ่ 1-3 ใบ
+                      </Typography>
+                    ) : !myAllRevealed || !(oppRevealed?.every(r => r)) ? (
+                      <Typography sx={{ fontSize: 11, color: '#ca8a04', fontStyle: 'italic' }}>
+                        กดเปิดไพ่เพื่อตัดสิน
+                      </Typography>
+                    ) : (
+                      <Typography sx={{ fontSize: 11, color: '#22c55e', fontStyle: 'italic' }}>
+                        กำลังตัดสินผล...
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+
+                {/* Opponent side */}
+                <Box sx={{ textAlign: 'center' }}>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
+                    {[0, 1, 2].map(index => (
+                      <BattleCard
+                        key={`opp-${index}`}
+                        card={oppCards?.[index]}
+                        isRevealed={oppRevealed?.[index] || false}
+                        isMyCard={false}
+                      />
+                    ))}
+                  </Box>
+                  <Typography sx={{ fontWeight: 700, fontSize: 16, color: '#f1f5f9', mb: 0.5 }}>
+                    {isP1 ? p2?.name : p1?.name}
+                  </Typography>
+                  <Box sx={{
+                    display: 'inline-block', bgcolor: 'rgba(185,28,28,0.15)',
+                    color: '#f87171', fontSize: 11, px: 1.5, py: 0.25,
+                    borderRadius: 10, border: '1px solid rgba(185,28,28,0.3)'
+                  }}>
+                    วางแล้ว {oppCardCount}/3
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* Arena footer hint */}
+              <Box sx={{ bgcolor: 'rgba(15,23,42,0.5)', px: 3, py: 1.5, borderTop: '1px solid rgba(30,41,59,0.5)', textAlign: 'center' }}>
+                <Typography sx={{ fontSize: 12, color: '#475569', fontStyle: 'italic' }}>
+                  ℹ️ วางไพ่ดอกเดียวกันกับที่ได้รับ (สูงสุด 3 ใบ) — คลิกไพ่ที่วางแล้วเพื่อเอาคืน
+                </Typography>
+              </Box>
+            </Box>
+          );
+        })()}
+
+        {/* ── Players Grid ── */}
+        <Box sx={{ mb: 4 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: 18, mb: 2, color: '#f1f5f9' }}>
+            ผู้เล่น ({room.players.length})
           </Typography>
-          
-          <Divider sx={{ my: 2 }} />
-          
-          {/* Number Cards */}
-          <Typography variant="subtitle2" gutterBottom>
-            ไพ่ตัวเลข
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
-            {myPlayer.cards
-              .filter(card => card.type === CardType.NUMBER)
-              .map(card => (
-                <CardComponent
-                  key={card.id}
-                  card={card}
-                  onClick={() => {
-                    if (room.currentBattle) {
-                      playCard(card);
-                    }
+          <Box sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' },
+            gap: 2
+          }}>
+            {room.players.map(player => {
+              const isMe = player.id === myPlayerId;
+              const canChallenge = !room.gameEnded && !room.currentBattle && !isMe && player.status !== PlayerStatus.ELIMINATED;
+              return (
+                <Box
+                  key={player.id}
+                  onClick={canChallenge ? () => { setSelectedOpponent(player); setShowBattleDialog(true); } : undefined}
+                  sx={{
+                    bgcolor: '#0f172a', border: isMe ? '2px solid #3b82f6' : '1px solid #1e293b',
+                    borderRadius: 3, p: 2.5,
+                    cursor: canChallenge ? 'pointer' : 'default',
+                    opacity: player.status === PlayerStatus.ELIMINATED ? 0.45 : 1,
+                    transition: 'all 0.2s',
+                    '&:hover': canChallenge ? { borderColor: '#f59e0b', transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' } : {},
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5
                   }}
-                  disabled={!room.currentBattle || room.gameEnded}
-                  selected={selectedCard?.id === card.id}
-                />
-              ))}
-            {myPlayer.cards.filter(c => c.type === CardType.NUMBER).length === 0 && (
-              <Typography color="text.secondary">ไม่มีไพ่ตัวเลข</Typography>
-            )}
+                >
+                  <Box sx={{ fontSize: 36 }}>
+                    {player.status === PlayerStatus.ELIMINATED ? '💀' : isMe ? '🧑' : '👤'}
+                  </Box>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography sx={{ fontWeight: 700, color: '#f1f5f9', fontSize: 15 }}>
+                      {player.name}{isMe ? ' (คุณ)' : ''}
+                    </Typography>
+                    {isMe && player.status !== PlayerStatus.ELIMINATED && (
+                      <Box sx={{
+                        display: 'inline-block', mt: 0.5,
+                        bgcolor: player.status === PlayerStatus.ZOMBIE ? 'rgba(34,197,94,0.15)' : 'rgba(59,130,246,0.15)',
+                        color: player.status === PlayerStatus.ZOMBIE ? '#4ade80' : '#60a5fa',
+                        fontSize: 11, px: 1.5, py: 0.25, borderRadius: 10,
+                        border: `1px solid ${player.status === PlayerStatus.ZOMBIE ? 'rgba(34,197,94,0.3)' : 'rgba(59,130,246,0.3)'}`
+                      }}>
+                        {player.status === PlayerStatus.ZOMBIE ? '🧟 ซอมบี้' : '🧑 มนุษย์'}
+                      </Box>
+                    )}
+                  </Box>
+                  <Chip label={`ไพ่: ${player.cards.length}`} size="small" variant="outlined" sx={{ fontSize: 11 }} />
+                  {canChallenge && (
+                    <Typography sx={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>
+                      คลิกเพื่อท้าชิง
+                    </Typography>
+                  )}
+                </Box>
+              );
+            })}
           </Box>
+        </Box>
 
-          {/* Special Cards */}
-          <Typography variant="subtitle2" gutterBottom>
-            ไพ่พิเศษ
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            {myPlayer.cards
-              .filter(card => card.type !== CardType.NUMBER)
-              .map(card => (
-                <CardComponent
-                  key={card.id}
-                  card={card}
-                  onClick={() => {
-                    if (card.type === CardType.ZOMBIE) {
-                      // ไพ่ซอมบี้: วางลงใน battle
-                      if (room.currentBattle) {
-                        playCard(card);
+        {/* ── My Hand ── */}
+        {myPlayer && (
+          <Box sx={{ bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4, p: { xs: 2, md: 3 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, pb: 1.5, borderBottom: '1px solid #1e293b' }}>
+              <Typography sx={{ fontWeight: 700, fontSize: 18, color: '#f1f5f9' }}>
+                ไพ่ของคุณ <Box component="span" sx={{ color: '#475569', fontWeight: 400 }}>({myPlayer.cards.length})</Box>
+              </Typography>
+              {room.currentBattle && isInBattle() && (
+                <Typography sx={{ fontSize: 12, color: '#64748b' }}>
+                  คลิกไพ่เพื่อวางลงกระดาน
+                </Typography>
+              )}
+            </Box>
+
+            {/* Number Cards */}
+            <Box sx={{ mb: 3 }}>
+              <Typography sx={{ fontSize: 11, color: '#475569', letterSpacing: 2, textTransform: 'uppercase', mb: 2 }}>
+                ไพ่ตัวเลข
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                {myPlayer.cards.filter(c => c.type === CardType.NUMBER).map(card => (
+                  <CardComponent
+                    key={card.id}
+                    card={card}
+                    onClick={() => { if (room.currentBattle) playCard(card); }}
+                    disabled={!room.currentBattle || room.gameEnded}
+                    selected={selectedCard?.id === card.id}
+                  />
+                ))}
+                {myPlayer.cards.filter(c => c.type === CardType.NUMBER).length === 0 && (
+                  <Typography sx={{ color: '#334155', fontStyle: 'italic', fontSize: 14 }}>ไม่มีไพ่ตัวเลข</Typography>
+                )}
+              </Box>
+            </Box>
+
+            {/* Special Cards */}
+            <Box>
+              <Typography sx={{ fontSize: 11, color: '#475569', letterSpacing: 2, textTransform: 'uppercase', mb: 2 }}>
+                ไพ่พิเศษ
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                {myPlayer.cards.filter(c => c.type !== CardType.NUMBER).map(card => (
+                  <CardComponent
+                    key={card.id}
+                    card={card}
+                    onClick={() => {
+                      if (card.type === CardType.ZOMBIE) {
+                        if (room.currentBattle) playCard(card);
+                      } else if (card.type === CardType.SHOTGUN) {
+                        if (room.currentBattle) playCard(card);
+                        else setError('ใช้ไพ่ปืนได้เฉพาะตอนอยู่ใน battle เท่านั้น');
+                      } else if (card.type === CardType.VACCINE) {
+                        openSpecialCardDialog(card.type);
                       }
-                    } else if (card.type === CardType.SHOTGUN) {
-                      // ไพ่ปืน: วางลงใน battle เหมือนไพ่ปกติ
-                      if (room.currentBattle) {
-                        playCard(card);
-                      } else {
-                        setError('ใช้ไพ่ปืนได้เฉพาะตอนอยู่ใน battle เท่านั้น');
-                      }
-                    } else if (card.type === CardType.VACCINE) {
-                      // วัคซีน: ใช้ได้เสมอผ่าน dialog
-                      openSpecialCardDialog(card.type);
-                    }
-                  }}
-                  disabled={room.gameEnded}
-                />
-              ))}
-            {myPlayer.cards.filter(c => c.type !== CardType.NUMBER).length === 0 && (
-              <Typography color="text.secondary">ไม่มีไพ่พิเศษ</Typography>
-            )}
+                    }}
+                    disabled={room.gameEnded}
+                  />
+                ))}
+                {myPlayer.cards.filter(c => c.type !== CardType.NUMBER).length === 0 && (
+                  <Typography sx={{ color: '#334155', fontStyle: 'italic', fontSize: 14 }}>ไม่มีไพ่พิเศษ</Typography>
+                )}
+              </Box>
+            </Box>
           </Box>
-        </Paper>
-      )}
+        )}
+      </Box>
 
-      {/* Battle Dialog */}
-      <Dialog open={showBattleDialog} onClose={() => setShowBattleDialog(false)}>
-        <DialogTitle>เริ่มแบทเทิล</DialogTitle>
+      {/* ── Battle Dialog ── */}
+      <Dialog open={showBattleDialog} onClose={() => setShowBattleDialog(false)} PaperProps={{ sx: { minWidth: 320 } }}>
+        <DialogTitle sx={{ fontWeight: 700 }}>⚔️ เริ่มแบทเทิล</DialogTitle>
         <DialogContent>
-          <Typography>
-            คุณต้องการท้าชิง {selectedOpponent?.name} หรือไม่?
-          </Typography>
+          <Typography>คุณต้องการท้าชิง <strong>{selectedOpponent?.name}</strong> หรือไม่?</Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
           <Button onClick={() => setShowBattleDialog(false)}>ยกเลิก</Button>
-          <Button onClick={startBattle} variant="contained">เริ่มแบทเทิล</Button>
+          <Button onClick={startBattle} variant="contained" color="error">เริ่มแบทเทิล</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Special Card Dialog - เฉพาะวัคซีน */}
-      <Dialog open={showSpecialCardDialog} onClose={() => setShowSpecialCardDialog(false)}>
-        <DialogTitle>
-          ใช้ไพ่วัคซีน
-        </DialogTitle>
+      {/* ── Vaccine Dialog ── */}
+      <Dialog open={showSpecialCardDialog} onClose={() => setShowSpecialCardDialog(false)} PaperProps={{ sx: { minWidth: 340 } }}>
+        <DialogTitle sx={{ fontWeight: 700 }}>💉 ใช้ไพ่วัคซีน</DialogTitle>
         <DialogContent>
-          <Typography gutterBottom>
-            เลือกผู้เล่นที่ต้องการรักษา (ไม่สามารถใช้กับตัวเองได้):
-          </Typography>
+          <Typography sx={{ mb: 2 }}>เลือกผู้เล่นที่ต้องการรักษา (ห้ามใช้กับตัวเอง):</Typography>
           <Stack spacing={1}>
             {(() => {
               const battleOpponent = getBattleOpponent();
-              let availablePlayers: Player[] = [];
-
-              // ไพ่วัคซีน: ห้ามใช้กับตัวเอง (ตามกติกา)
-              if (isInBattle() && battleOpponent) {
-                // ถ้าอยู่ใน battle แสดงเฉพาะคู่ battle
-                availablePlayers = [battleOpponent];
-              } else {
-                // ถ้าไม่อยู่ใน battle แสดงทุกคนยกเว้นตัวเอง
-                availablePlayers = room.players.filter(p => 
-                  p.status !== PlayerStatus.ELIMINATED && p.id !== myPlayerId
-                );
-              }
-
+              const availablePlayers: Player[] = isInBattle() && battleOpponent
+                ? [battleOpponent]
+                : room.players.filter(p => p.status !== PlayerStatus.ELIMINATED && p.id !== myPlayerId);
               return availablePlayers.map(player => (
                 <Button
                   key={player.id}
@@ -786,41 +946,26 @@ export default function GameBoard() {
             })()}
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-            {isInBattle() 
-              ? '⚠️ กติกา: วัคซีนห้ามใช้กับตัวเอง (ใช้ได้เฉพาะคู่ battle ที่มีไพ่ซอมบี้)'
-              : '⚠️ กติกา: วัคซีนห้ามใช้กับตัวเอง (ใช้ได้กับผู้เล่นที่มีไพ่ซอมบี้)'}
+            {isInBattle()
+              ? '⚠️ กติกา: วัคซีนห้ามใช้กับตัวเอง (ใช้ได้เฉพาะคู่ battle)'
+              : '⚠️ กติกา: วัคซีนห้ามใช้กับตัวเอง'}
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
           <Button onClick={() => setShowSpecialCardDialog(false)}>ยกเลิก</Button>
-          <Button 
-            onClick={useSpecialCard} 
-            variant="contained"
-            disabled={!selectedTarget}
-          >
-            ใช้ไพ่
-          </Button>
+          <Button onClick={useSpecialCard} variant="contained" disabled={!selectedTarget}>ใช้ไพ่</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Snackbars */}
-      <Snackbar 
-        open={!!message} 
-        autoHideDuration={3000} 
-        onClose={() => setMessage('')}
-      >
+      {/* ── Snackbars ── */}
+      <Snackbar open={!!message} autoHideDuration={3000} onClose={() => setMessage('')}>
         <Alert severity="success">{message}</Alert>
       </Snackbar>
-
-      <Snackbar 
-        open={!!error} 
-        autoHideDuration={3000} 
-        onClose={() => setError('')}
-      >
+      <Snackbar open={!!error} autoHideDuration={3000} onClose={() => setError('')}>
         <Alert severity="error">{error}</Alert>
       </Snackbar>
 
-      {/* Shotgun Choice Modal */}
+      {/* ── Shotgun Choice Modal ── */}
       <ShotgunChoiceModal
         isOpen={showShotgunChoice && shotgunChoiceData?.chooserId === myPlayerId}
         battleId={shotgunChoiceData?.battleId || ''}
@@ -828,6 +973,6 @@ export default function GameBoard() {
         loserName={shotgunChoiceData?.loserName || ''}
         onChoose={handleShotgunChoice}
       />
-    </Container>
+    </Box>
   );
 }
