@@ -3,42 +3,64 @@
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { ReactNode } from 'react';
 
+// Neon Survival Playground palette — see DESIGN.md
 const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',
     primary: {
-      main: '#3b82f6',   // blue-500
+      main: '#7C5CFF',      // --color-primary
+      dark: '#4E35B8',      // --color-primary-dark
+      light: '#EEE9FF',     // --color-primary-soft
+      contrastText: '#FFFFFF',
     },
     secondary: {
-      main: '#ef4444',   // red-500
+      main: '#00D9C0',      // --color-secondary
+      dark: '#009A89',
+      light: '#E5FFFB',
+      contrastText: '#FFFFFF',
     },
     success: {
-      main: '#22c55e',   // green-500
+      main: '#00D9C0',      // safe / ready
+      dark: '#009A89',
+      contrastText: '#FFFFFF',
+    },
+    error: {
+      main: '#FF4D6D',      // --color-danger
+      dark: '#B8203D',
+      contrastText: '#FFFFFF',
     },
     warning: {
-      main: '#eab308',   // yellow-500
+      main: '#FFD166',      // --color-accent-yellow
+      contrastText: '#202238',
+    },
+    info: {
+      main: '#7C5CFF',
+      contrastText: '#FFFFFF',
     },
     background: {
-      default: '#0f172a', // slate-900
-      paper: '#1e293b',   // slate-800
+      default: '#F8F7FF',   // --color-bg
+      paper: '#FFFFFF',     // --color-bg-card
     },
     text: {
-      primary: '#f1f5f9',   // slate-100
-      secondary: '#94a3b8', // slate-400
+      primary: '#202238',   // --color-text-main
+      secondary: '#6B6F8A', // --color-text-secondary
     },
+    divider: '#E4E7F5',     // --color-border
   },
   shape: {
     borderRadius: 12,
   },
   typography: {
-    fontFamily: 'Roboto, Arial, sans-serif',
+    fontFamily: 'Inter, Prompt, Roboto, Arial, sans-serif',
+    fontWeightBold: 700,
   },
   components: {
     MuiPaper: {
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          border: '1px solid #334155', // slate-700
+          border: '1px solid #E4E7F5',
+          borderRadius: 20,
         },
       },
     },
@@ -46,8 +68,10 @@ const theme = createTheme({
       styleOverrides: {
         paper: {
           backgroundImage: 'none',
-          border: '1px solid #334155',
-          backgroundColor: '#1e293b',
+          border: '1px solid #E4E7F5',
+          backgroundColor: '#FFFFFF',
+          borderRadius: 28,
+          boxShadow: '0 16px 40px rgba(32, 34, 56, 0.14)',
         },
       },
     },
@@ -56,7 +80,11 @@ const theme = createTheme({
         root: {
           textTransform: 'none',
           fontWeight: 700,
-          borderRadius: 12,
+          borderRadius: 16,
+          minHeight: 44, // DESIGN.md §15 — touch target ≥ 44px
+        },
+        containedPrimary: {
+          boxShadow: '0 8px 24px rgba(124, 92, 255, 0.25)',
         },
       },
     },
@@ -72,7 +100,15 @@ const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 999,
+          fontWeight: 700,
+        },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
         },
       },
     },

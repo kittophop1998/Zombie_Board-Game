@@ -53,15 +53,15 @@ const getCardFileName = (card: GameCard): string => {
 export default function BattleCard({ card, isRevealed, isMyCard, onClick }: BattleCardProps) {
   if (!card) {
     return (
-      <Box sx={{ 
-        width: 80, 
-        height: 120, 
-        border: '2px dashed #bdc3c7',
-        borderRadius: 2,
+      <Box sx={{
+        width: 80,
+        height: 120,
+        border: '2px dashed #E4E7F5',
+        borderRadius: '14px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#95a5a6',
+        color: '#A0A4BD',
         fontSize: '12px',
         textAlign: 'center'
       }}>
@@ -82,12 +82,13 @@ export default function BattleCard({ card, isRevealed, isMyCard, onClick }: Batt
         width: 80,
         height: 120,
         cursor: onClick ? 'pointer' : 'default',
-        border: '2px solid #3498db',
-        borderRadius: 2,
-        transition: 'all 0.3s',
+        border: '2px solid #7C5CFF',
+        borderRadius: '14px',
+        boxShadow: '0 4px 12px rgba(32, 34, 56, 0.06)',
+        transition: 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
         '&:hover': onClick ? {
           transform: 'scale(1.05)',
-          boxShadow: 6
+          boxShadow: '0 0 24px rgba(124, 92, 255, 0.28)'
         } : {},
         position: 'relative',
         overflow: 'hidden',

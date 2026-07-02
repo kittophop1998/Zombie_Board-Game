@@ -22,7 +22,7 @@ interface PlayerCardProps {
 export default function PlayerCard({ player, isCurrentPlayer, onSelect, showStatus = false }: PlayerCardProps) {
   const getStatusColor = () => {
     // ใช้สีเดียวกันทุกคนเพื่อไม่ให้เห็นสถานะ
-    return '#3498db';
+    return '#7C5CFF';
   };
 
   const getStatusIcon = () => {
@@ -61,11 +61,11 @@ export default function PlayerCard({ player, isCurrentPlayer, onSelect, showStat
       sx={{
         minWidth: 200,
         cursor: onSelect ? 'pointer' : 'default',
-        border: isCurrentPlayer ? '3px solid #f39c12' : '1px solid #ecf0f1',
-        boxShadow: isCurrentPlayer ? 4 : 1,
-        transition: 'all 0.3s',
+        border: isCurrentPlayer ? '3px solid #7C5CFF' : '1px solid #E4E7F5',
+        boxShadow: isCurrentPlayer ? '0 0 24px rgba(124, 92, 255, 0.28)' : '0 4px 12px rgba(32, 34, 56, 0.06)',
+        transition: 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
         '&:hover': onSelect ? {
-          boxShadow: 6,
+          boxShadow: '0 16px 40px rgba(32, 34, 56, 0.14)',
           transform: 'translateY(-5px)'
         } : {},
         opacity: player.status === PlayerStatus.ELIMINATED ? 0.5 : 1

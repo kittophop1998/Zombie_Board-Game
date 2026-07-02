@@ -1,3 +1,84 @@
+/* ===========================================================================
+   Neon Survival Playground — Design tokens (see DESIGN.md)
+   =========================================================================== */
+:root {
+  /* Primary */
+  --color-primary: #7C5CFF;
+  --color-primary-soft: #EEE9FF;
+  --color-primary-dark: #4E35B8;
+
+  /* Secondary */
+  --color-secondary: #00D9C0;
+  --color-secondary-soft: #E5FFFB;
+  --color-secondary-dark: #009A89;
+
+  /* Accent */
+  --color-accent-yellow: #FFD166;
+  --color-accent-orange: #FF9F45;
+  --color-accent-pink: #FF6FAE;
+
+  /* Zombie / Danger */
+  --color-danger: #FF4D6D;
+  --color-danger-soft: #FFE8EE;
+  --color-danger-dark: #B8203D;
+
+  --color-warning: #FFD166;
+
+  /* Background */
+  --color-bg: #F8F7FF;
+  --color-bg-card: #FFFFFF;
+  --color-bg-soft: #F1F5FF;
+  --color-bg-dark: #171A2E;
+
+  /* Text */
+  --color-text-main: #202238;
+  --color-text-secondary: #6B6F8A;
+  --color-text-muted: #A0A4BD;
+  --color-text-inverse: #FFFFFF;
+
+  /* Border */
+  --color-border: #E4E7F5;
+  --color-border-active: #7C5CFF;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 999px;
+
+  /* Shadow */
+  --shadow-sm: 0 4px 12px rgba(32, 34, 56, 0.06);
+  --shadow-md: 0 8px 24px rgba(32, 34, 56, 0.10);
+  --shadow-lg: 0 16px 40px rgba(32, 34, 56, 0.14);
+  --shadow-glow: 0 0 24px rgba(124, 92, 255, 0.28);
+
+  /* Font scale */
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 20px;
+  --font-xl: 24px;
+  --font-2xl: 32px;
+  --font-3xl: 40px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Motion */
+  --motion-fast: 120ms;
+  --motion-normal: 220ms;
+  --motion-slow: 360ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -8,11 +89,23 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background: #0f172a;
-  font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
-  color: #f1f5f9;
+  background: var(--color-bg);
+  font-family: 'Inter', 'Prompt', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  color: var(--color-text-main);
 }
 
 html {
   scroll-behavior: smooth;
+}
+
+/* Respect users who prefer reduced motion (DESIGN.md §15) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

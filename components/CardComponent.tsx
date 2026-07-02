@@ -61,12 +61,13 @@ export default function CardComponent({ card, onClick, disabled, selected }: Car
         height: 180,
         cursor: disabled ? 'not-allowed' : onClick ? 'pointer' : 'default',
         opacity: disabled ? 0.5 : 1,
-        border: selected ? '3px solid #3498db' : '2px solid #bdc3c7',
-        borderRadius: 2,
-        transition: 'all 0.3s',
+        border: selected ? '3px solid #7C5CFF' : '2px solid #E4E7F5',
+        borderRadius: '14px',
+        boxShadow: selected ? '0 0 24px rgba(124, 92, 255, 0.28)' : '0 4px 12px rgba(32, 34, 56, 0.06)',
+        transition: 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
         '&:hover': onClick && !disabled ? {
           transform: 'translateY(-10px)',
-          boxShadow: 6
+          boxShadow: '0 16px 40px rgba(32, 34, 56, 0.14)'
         } : {},
         position: 'relative',
         overflow: 'hidden',
