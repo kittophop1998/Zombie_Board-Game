@@ -1,5 +1,13 @@
 import { Card, CardType, CardSuit, Player, PlayerStatus } from '../types/game';
 
+export const INITIAL_HP = 2;
+export const MAX_INFECTION = 2;
+export const MAX_CARDS_PER_BATTLE = 3;
+export const MAX_SHOTGUNS = 2;
+export const SHOTGUN_BONUS = 3;
+export const BIG_WIN_DIFFERENCE = 5;
+export const REVEALED_ZOMBIE_BONUS = 2;
+
 // สร้างไพ่ทั้งหมดในสำรับ
 export function createDeck(): Card[] {
   const cards: Card[] = [];
@@ -45,15 +53,13 @@ export function dealCards(players: Player[]): Player[] {
 
 // แจกไพ่พิเศษ และสุ่ม role ซอมบี้กับคนให้เท่าๆกัน
 export function distributeSpecialCards(players: Player[]): Player[] {
-  const updatedPlayers = [...players];
-  
-  // แจกไพ่ปืนลูกซองให้ทุกคน 1 ใบ
-  updatedPlayers.forEach(player => {
-    player.cards.push({
-      id: `shotgun-${player.id}`,
-      type: CardType.SHOTGUN
-    });
-  });
+  const updatedPlayers = players.map(player => ({
+    ...player,
+    cards: [...player.cards],
+    hp: INITIAL_HP,
+    infectionLevel: 0,
+    isRevealed: false
+  }));
   
   // สุ่ม role ซอมบี้กับคนให้เท่าๆกัน
   const halfPlayers = Math.floor(updatedPlayers.length / 2);
@@ -81,6 +87,16 @@ export function distributeSpecialCards(players: Player[]): Player[] {
   for (let i = numZombies; i < updatedPlayers.length; i++) {
     const index = shuffledIndices[i];
     updatedPlayers[index].status = PlayerStatus.HUMAN;
+  }
+
+  // แจกปืนแบบสุ่มให้มนุษย์เพียง floor(humanCount / 2) ใบ
+  const humanIndices = shuffledIndices.slice(numZombies);
+  for (let i = 0; i < Math.floor(numHumans / 2); i++) {
+    const index = humanIndices[i];
+    updatedPlayers[index].cards.push({
+      id: `shotgun-${updatedPlayers[index].id}-${i}`,
+      type: CardType.SHOTGUN
+    });
   }
   
   // แจกไพ่วัคซีนให้ผู้เล่นที่เป็นมนุษย์
@@ -159,6 +175,17 @@ export function calculateCardValue(card: Card | undefined): number {
 // คำนวณผลรวมแต้มจากไพ่หลายใบ
 export function calculateTotalValue(cards: Card[]): number {
   return cards.reduce((total, card) => total + calculateCardValue(card), 0);
+}
+
+export function calculateBattleScore(cards: Card[], player: Player, opponent: Player): number {
+  let score = calculateTotalValue(cards);
+  if (cards.some(card => card.type === CardType.SHOTGUN)) score += SHOTGUN_BONUS;
+  if (player.status === PlayerStatus.HUMAN &&
+      opponent.status === PlayerStatus.ZOMBIE &&
+      opponent.isRevealed) {
+    score += REVEALED_ZOMBIE_BONUS;
+  }
+  return score;
 }
 
 // ตรวจสอบว่าไพ่ทั้งหมดเป็นดอกเดียวกันหรือไม่ (ไม่นับไพ่พิเศษ)
@@ -248,207 +275,73 @@ export function determineBattleWinner(
   infectedPlayerId?: string; // ผู้เล่นที่ติดเชื้อ
   zombiePlayerId?: string; // ผู้เล่นที่แพร่เชื้อ
   zombieCardReturned?: boolean; // true ถ้าไพ่ซอมบี้ถูกคืนกลับ
-  eliminatedPlayerId?: string; // ผู้เล่นที่ถูกกำจัด (ยิงตาย)
-  shotgunAction?: 'stolen' | 'kill_opponent' | 'kill_self' | 'pending_choice'; // การกระทำของปืน
+  shotgunAction?: 'stolen' | 'kill_opponent' | 'kill_self' | 'pending_choice';
   shotgunOwnerId?: string; // เจ้าของปืนใหม่ (กรณียึดปืน)
   zombieRevealed?: boolean; // true ถ้าซอมบี้ถูกเปิดเผยตัวตน
   needsPlayerChoice?: boolean; // true ถ้าต้องรอผู้เล่นเลือก
   chooserId?: string; // ผู้เล่นที่ต้องเลือก
   loserId?: string; // ผู้เล่นที่แพ้
+  damagePlayerId?: string;
+  damage?: number;
 } {
   if (cards1.length === 0 || cards2.length === 0) {
     return { winnerId: null, isInfection: false };
   }
   
-  // ตรวจสอบว่ามีไพ่พิเศษหรือไม่
+  // ไพ่พิเศษไม่มีแต้ม ยกเว้นโบนัสปืน และมนุษย์ได้โบนัสเมื่อต่อสู้ซอมบี้ที่เปิดเผย
   const hasShotgun1 = cards1.some(card => card.type === CardType.SHOTGUN);
   const hasShotgun2 = cards2.some(card => card.type === CardType.SHOTGUN);
   const hasZombieCard1 = cards1.some(card => card.type === CardType.ZOMBIE);
   const hasZombieCard2 = cards2.some(card => card.type === CardType.ZOMBIE);
   
-  // === ประเมินมือไพ่แบบ 9เก ===
-  const hand1 = evaluateHand(cards1);
-  const hand2 = evaluateHand(cards2);
-  const cmp = compareHands(hand1, hand2); // 1=p1 ชนะ, -1=p2 ชนะ, 0=เสมอ
+  const score1 = calculateBattleScore(cards1, player1, player2);
+  const score2 = calculateBattleScore(cards2, player2, player1);
+  const cmp = score1 === score2 ? 0 : score1 > score2 ? 1 : -1;
+  const winner = cmp > 0 ? player1 : cmp < 0 ? player2 : undefined;
+  const loser = cmp > 0 ? player2 : cmp < 0 ? player1 : undefined;
+  const damage = Math.abs(score1 - score2) >= BIG_WIN_DIFFERENCE ? 2 : 1;
 
-  // ======================================================
-  // === กรณีที่มีไพ่ปืน (ฝั่งใดฝั่งหนึ่ง หรือทั้งสอง) ===
-  // ======================================================
-  // ใช้ผลเปรียบเทียบมือไพ่แบบ 9เก (cmp) แทนการเทียบแต้มรวม
-  // ผู้วางปืน+ชนะ → ยิงฝ่ายตรงข้ามตาย; ผู้วางปืน+แพ้ → ฝ่ายชนะเลือกได้
-
-  if (hasShotgun1 || hasShotgun2) {
-    // --- กรณี: Player1 วางปืน ---
-    if (hasShotgun1 && !hasShotgun2) {
-      if (cmp > 0) {
-        // คนวางปืน (p1) ชนะ → ฝ่ายตรงข้ามตายทันที
-        return {
-          winnerId: player1.id,
-          isInfection: false,
-          eliminatedPlayerId: player2.id,
-          shotgunAction: 'kill_opponent'
-        };
-      } else if (cmp < 0) {
-        // คนวางปืน (p1) แพ้ → อีกฝั่ง (p2) เลือกได้
-        return {
-          winnerId: player2.id,
-          isInfection: false,
-          shotgunAction: 'pending_choice',
-          needsPlayerChoice: true,
-          chooserId: player2.id,
-          loserId: player1.id
-        };
-      }
-      // เสมอ
-      return { winnerId: null, isInfection: false };
-    }
-
-    // --- กรณี: Player2 วางปืน ---
-    if (hasShotgun2 && !hasShotgun1) {
-      if (cmp < 0) {
-        // คนวางปืน (p2) ชนะ → ฝ่ายตรงข้ามตายทันที
-        return {
-          winnerId: player2.id,
-          isInfection: false,
-          eliminatedPlayerId: player1.id,
-          shotgunAction: 'kill_opponent'
-        };
-      } else if (cmp > 0) {
-        // คนวางปืน (p2) แพ้ → อีกฝั่ง (p1) เลือกได้
-        return {
-          winnerId: player1.id,
-          isInfection: false,
-          shotgunAction: 'pending_choice',
-          needsPlayerChoice: true,
-          chooserId: player1.id,
-          loserId: player2.id
-        };
-      }
-      // เสมอ
-      return { winnerId: null, isInfection: false };
-    }
-
-    // --- กรณี: ทั้งสองวางปืน → ชนะด้วยมือ 9เก ฝ่ายชนะยิงอีกฝ่ายตายทันที ---
-    if (hasShotgun1 && hasShotgun2) {
-      if (cmp > 0) {
-        return {
-          winnerId: player1.id,
-          isInfection: false,
-          eliminatedPlayerId: player2.id,
-          shotgunAction: 'kill_opponent'
-        };
-      } else if (cmp < 0) {
-        return {
-          winnerId: player2.id,
-          isInfection: false,
-          eliminatedPlayerId: player1.id,
-          shotgunAction: 'kill_opponent'
-        };
-      }
-      // เสมอ — ไม่มีผู้ชนะ
-      return { winnerId: null, isInfection: false };
-    }
+  if (!winner || !loser) {
+    const zombiePlayer = hasZombieCard1 ? player1 : hasZombieCard2 ? player2 : undefined;
+    return { winnerId: null, isInfection: false, zombiePlayerId: zombiePlayer?.id,
+      zombieCardReturned: Boolean(zombiePlayer) };
   }
 
-  // ======================================================
-  // === กรณีที่ 3: ซอมบี้ใช้ไพ่ซอมบี้ (ไม่มีปืน) ===
-  // ======================================================
-  
-  // Player1 เป็นซอมบี้และวางไพ่ซอมบี้
-  if (hasZombieCard1 && player1.status === PlayerStatus.ZOMBIE) {
-    // ถ้า player2 เป็นซอมบี้อยู่แล้ว ไม่สามารถแพร่เชื้อได้ นับด้วยมือ 9เก
-    if (player2.status === PlayerStatus.ZOMBIE) {
-      if (cmp > 0) return { winnerId: player1.id, isInfection: false };
-      if (cmp < 0) return { winnerId: player2.id, isInfection: false };
-      return { winnerId: null, isInfection: false };
+  const shotgunUser = hasShotgun1 !== hasShotgun2 ? (hasShotgun1 ? player1 : player2) : undefined;
+  if (shotgunUser?.status === PlayerStatus.HUMAN && shotgunUser.id === loser.id) {
+    if (winner.status === PlayerStatus.ZOMBIE) {
+      return { winnerId: winner.id, isInfection: true, infectedPlayerId: shotgunUser.id };
     }
-    
-    // ถ้า player2 เป็นมนุษย์
-    // 3.1 มือ 9เก ของซอมบี้แรงกว่า -> แพร่เชื้อสำเร็จ และคืนไพ่ซอมบี้
-    if (cmp > 0) {
-      return {
-        winnerId: player1.id,
-        isInfection: true,
-        infectedPlayerId: player2.id,
-        zombiePlayerId: player1.id,
-        zombieCardReturned: true // คืนไพ่ซอมบี้กลับ
-      };
-    }
-    // 3.2 มือ 9เก ของซอมบี้อ่อนกว่า -> แพร่เชื้อไม่สำเร็จ และเปิดเผยตัวตน
-    else if (cmp < 0) {
-      return {
-        winnerId: player2.id,
-        isInfection: false,
-        zombieRevealed: true,
-        zombiePlayerId: player1.id,
-        zombieCardReturned: true // คืนไพ่ซอมบี้กลับ
-      };
-    }
-    // เสมอ
-    return { 
-      winnerId: null, 
-      isInfection: false,
-      zombieCardReturned: true // คืนไพ่ซอมบี้กลับ
+    return { winnerId: winner.id, isInfection: false, shotgunAction: 'pending_choice',
+      needsPlayerChoice: true, chooserId: winner.id, loserId: shotgunUser.id };
+  }
+
+  const zombieAttacker = hasZombieCard1 && player1.status === PlayerStatus.ZOMBIE ? player1 :
+    hasZombieCard2 && player2.status === PlayerStatus.ZOMBIE ? player2 : undefined;
+  const zombieTarget = zombieAttacker?.id === player1.id ? player2 : player1;
+  if (zombieAttacker) {
+    const canInfect = zombieTarget.status === PlayerStatus.HUMAN;
+    return {
+      winnerId: winner.id,
+      isInfection: canInfect && winner.id === zombieAttacker.id,
+      infectedPlayerId: canInfect && winner.id === zombieAttacker.id ? zombieTarget.id : undefined,
+      zombiePlayerId: zombieAttacker.id,
+      zombieCardReturned: true,
+      zombieRevealed: canInfect && winner.id !== zombieAttacker.id
     };
   }
-  
-  // Player2 เป็นซอมบี้และวางไพ่ซอมบี้
-  if (hasZombieCard2 && player2.status === PlayerStatus.ZOMBIE) {
-    // ถ้า player1 เป็นซอมบี้อยู่แล้ว ไม่สามารถแพร่เชื้อได้ นับด้วยมือ 9เก
-    if (player1.status === PlayerStatus.ZOMBIE) {
-      if (cmp > 0) return { winnerId: player1.id, isInfection: false };
-      if (cmp < 0) return { winnerId: player2.id, isInfection: false };
-      return { winnerId: null, isInfection: false };
-    }
-    
-    // ถ้า player1 เป็นมนุษย์
-    // 3.1 มือ 9เก ของซอมบี้แรงกว่า -> แพร่เชื้อสำเร็จ และคืนไพ่ซอมบี้
-    if (cmp < 0) {
-      return {
-        winnerId: player2.id,
-        isInfection: true,
-        infectedPlayerId: player1.id,
-        zombiePlayerId: player2.id,
-        zombieCardReturned: true
-      };
-    }
-    // 3.2 มือ 9เก ของซอมบี้อ่อนกว่า -> แพร่เชื้อไม่สำเร็จ และเปิดเผยตัวตน
-    else if (cmp > 0) {
-      return {
-        winnerId: player1.id,
-        isInfection: false,
-        zombieRevealed: true,
-        zombiePlayerId: player2.id,
-        zombieCardReturned: true
-      };
-    }
-    // เสมอ
-    return { 
-      winnerId: null, 
-      isInfection: false,
-      zombieCardReturned: true
-    };
-  }
-  
-  // === กรณีปกติ: เปรียบเทียบมือไพ่แบบ 9เก ===
-  if (cmp > 0) return { winnerId: player1.id, isInfection: false };
-  if (cmp < 0) return { winnerId: player2.id, isInfection: false };
-  
-  return { winnerId: null, isInfection: false }; // เสมอ
+
+  return { winnerId: winner.id, isInfection: false, damagePlayerId: loser.id, damage };
 }
 
 // จัดการการติดเชื้อซอมบี้ - เพิ่มไพ่ซอมบี้ให้ผู้เล่นที่ติดเชื้อ
 export function infectPlayer(player: Player): Player {
-  const updatedPlayer = { ...player };
-  
-  // เปลี่ยนสถานะเป็นซอมบี้
-  updatedPlayer.status = PlayerStatus.ZOMBIE;
-  
-  // เพิ่มไพ่ซอมบี้ให้
-  updatedPlayer.cards.push({
-    id: `zombie-infected-${player.id}-${Date.now()}`,
-    type: CardType.ZOMBIE
-  });
+  const updatedPlayer = { ...player, cards: [...player.cards] };
+  updatedPlayer.infectionLevel = Math.min(MAX_INFECTION, updatedPlayer.infectionLevel + 1);
+  if (updatedPlayer.infectionLevel >= MAX_INFECTION) {
+    updatedPlayer.status = PlayerStatus.ZOMBIE;
+    updatedPlayer.cards.push({ id: `zombie-infected-${player.id}-${Date.now()}`, type: CardType.ZOMBIE });
+  }
   
   return updatedPlayer;
 }

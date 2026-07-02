@@ -37,6 +37,9 @@ export interface Player {
   status: PlayerStatus;
   cards: Card[];
   isReady: boolean;
+  hp: number;
+  infectionLevel: number;
+  isRevealed: boolean;
 }
 
 // โต๊ะเล่น (Battle)

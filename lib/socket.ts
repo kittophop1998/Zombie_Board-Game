@@ -7,8 +7,15 @@ import {
   assignTeams, 
   determineBattleWinner,
   checkGameEnd,
-  countPlayersByStatus,
-  calculateTotalValue
+  countPlayersByStatus
+} from '../lib/gameLogic';
+import {
+  INITIAL_HP,
+  MAX_CARDS_PER_BATTLE,
+  MAX_INFECTION,
+  MAX_SHOTGUNS,
+  infectPlayer,
+  calculateBattleScore
 } from '../lib/gameLogic';
 
 const rooms = new Map<string, GameRoom>();
@@ -37,6 +44,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         status: PlayerStatus.HUMAN,
         cards: [],
         isReady: false
+        ,hp: INITIAL_HP, infectionLevel: 0, isRevealed: false
       };
 
       const room: GameRoom = {
@@ -75,6 +83,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
         status: PlayerStatus.HUMAN,
         cards: [],
         isReady: false
+        ,hp: INITIAL_HP, infectionLevel: 0, isRevealed: false
       };
 
       room.players.push(player);
@@ -133,6 +142,15 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
 
       const card = player.cards[cardIndex];
 
+      if (card.type === CardType.SHOTGUN && player.status !== PlayerStatus.HUMAN) {
+        socket.emit('error', { message: 'เฉพาะมนุษย์เท่านั้นที่ใช้ SHOTGUN ได้' });
+        return;
+      }
+      if (card.type === CardType.ZOMBIE && player.status !== PlayerStatus.ZOMBIE) {
+        socket.emit('error', { message: 'เฉพาะซอมบี้เท่านั้นที่ใช้ ZOMBIE_CARD ได้' });
+        return;
+      }
+
       console.log('Battle IDs:', {
         player1Id: battle.player1Id,
         player2Id: battle.player2Id,
@@ -141,7 +159,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
 
       // เช็คว่าวางครบ 3 ใบหรือยัง (กติกาใหม่: ได้ไม่เกิน 3 ใบ รวมไพ่พิเศษ)
       const myCards = battle.player1Id === socket.id ? battle.player1Cards : battle.player2Cards;
-      if (myCards.length >= 3) {
+      if (myCards.length >= MAX_CARDS_PER_BATTLE) {
         socket.emit('error', { message: 'วางไพ่ได้สูงสุด 3 ใบ (รวมไพ่พิเศษ เช่น ปืน, ซอมบี้)' });
         return;
       }
@@ -350,6 +368,8 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
 
       // เปลี่ยน target กลับเป็นมนุษย์
       target.status = PlayerStatus.HUMAN;
+      target.infectionLevel = 0;
+      target.isRevealed = false;
       // ลบไพ่ซอมบี้ทั้งหมดของ target
       target.cards = target.cards.filter(c => c.type !== CardType.ZOMBIE);
 
@@ -499,7 +519,7 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
       if (data.action === 'steal') {
         // ยึดปืนมาใช้เอง
         const currentShotguns = chooser.cards.filter(c => c.type === CardType.SHOTGUN).length;
-        if (currentShotguns < 3) {
+        if (currentShotguns < MAX_SHOTGUNS) {
           chooser.cards.push(shotgunCard);
           io.to(room.id).emit('message', { 
             message: `${chooser.name} ยึดปืนจาก ${loser.name}!` 
@@ -510,11 +530,13 @@ export function setupSocketServer(httpServer: ReturnType<typeof createServer>) {
           });
         }
       } else if (data.action === 'kill_opponent') {
-        // ใช้ปืนยิงฝั่งตรงข้ามให้ตาย
-        loser.status = PlayerStatus.ELIMINATED;
-        loser.cards = [];
+        loser.hp = Math.max(0, loser.hp - 1);
+        if (loser.hp === 0) {
+          loser.status = PlayerStatus.ELIMINATED;
+          loser.cards = [];
+        }
         io.to(room.id).emit('message', { 
-          message: `${chooser.name} ใช้ปืนของ ${loser.name} ยิง ${loser.name} ตาย!` 
+          message: `${chooser.name} ทำให้ ${loser.name} เสีย HP 1!`
         });
       }
 
@@ -640,8 +662,8 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
   const result = determineBattleWinner(battle.player1Cards, battle.player2Cards, player1, player2);
   const winnerId = result.winnerId;
   
-  const total1 = calculateTotalValue(battle.player1Cards);
-  const total2 = calculateTotalValue(battle.player2Cards);
+  const total1 = calculateBattleScore(battle.player1Cards, player1, player2);
+  const total2 = calculateBattleScore(battle.player2Cards, player2, player1);
   
   // === กรณีที่ต้องรอผู้เล่นเลือก (ยึดปืนหรือยิงฝั่งตรงข้าม) ===
   if (result.needsPlayerChoice && result.chooserId && result.loserId) {
@@ -695,30 +717,28 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
   
   // === จัดการกรณีพิเศษต่างๆ ===
   
-  // กรณีมีการกำจัด (ยิงตาย)
-  if (result.eliminatedPlayerId) {
-    const eliminated = room.players.find(p => p.id === result.eliminatedPlayerId);
-    if (eliminated) {
-      eliminated.status = PlayerStatus.ELIMINATED;
-      eliminated.cards = [];
-      io.to(room.id).emit('message', { 
-        message: `${eliminated.name} ถูกยิงตาย!` 
-      });
-    }
-  }
-  
   // กรณีมีการแพร่เชื้อ
   if (result.isInfection && result.infectedPlayerId) {
     const infectedPlayer = room.players.find(p => p.id === result.infectedPlayerId);
     if (infectedPlayer) {
-      infectedPlayer.status = PlayerStatus.ZOMBIE;
-      infectedPlayer.cards.push({
-        id: `zombie-infected-${infectedPlayer.id}-${Date.now()}`,
-        type: CardType.ZOMBIE
-      });
+      Object.assign(infectedPlayer, infectPlayer(infectedPlayer));
       io.to(room.id).emit('message', { 
-        message: `${infectedPlayer.name} ติดเชื้อซอมบี้!` 
+        message: infectedPlayer.status === PlayerStatus.ZOMBIE
+          ? `${infectedPlayer.name} ติดเชื้อครบ ${MAX_INFECTION} และกลายเป็นซอมบี้!`
+          : `${infectedPlayer.name} มีระดับเชื้อ ${infectedPlayer.infectionLevel}/${MAX_INFECTION}`
       });
+    }
+  }
+
+  if (result.damagePlayerId && result.damage) {
+    const damaged = room.players.find(p => p.id === result.damagePlayerId);
+    if (damaged) {
+      damaged.hp = Math.max(0, damaged.hp - result.damage);
+      if (damaged.hp === 0) {
+        damaged.status = PlayerStatus.ELIMINATED;
+        damaged.cards = [];
+      }
+      io.to(room.id).emit('message', { message: `${damaged.name} เสีย HP ${result.damage} (เหลือ ${damaged.hp})` });
     }
   }
   
@@ -726,6 +746,7 @@ function resolveBattle(room: GameRoom, battle: Battle, io: SocketServer) {
   if (result.zombieRevealed && result.zombiePlayerId) {
     const zombiePlayer = room.players.find(p => p.id === result.zombiePlayerId);
     if (zombiePlayer) {
+      zombiePlayer.isRevealed = true;
       io.to(room.id).emit('message', { 
         message: `${zombiePlayer.name} ถูกเปิดเผยว่าเป็นซอมบี้!` 
       });

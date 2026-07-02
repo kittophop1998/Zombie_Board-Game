@@ -104,6 +104,11 @@ export default function PlayerCard({ player, isCurrentPlayer, onSelect, showStat
               size="small"
               variant="outlined"
             />
+            <Chip label={`HP: ${player.hp}/2`} size="small" color="error" variant="outlined" />
+            {(isCurrentPlayer || showStatus || player.isRevealed) && (
+              <Chip label={`เชื้อ: ${player.infectionLevel}/2`} size="small" color="warning" variant="outlined" />
+            )}
+            {player.isRevealed && <Chip label="เปิดเผยแล้ว" size="small" color="secondary" />}
           </Box>
         </Stack>
       </CardContent>

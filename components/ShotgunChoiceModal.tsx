@@ -36,7 +36,7 @@ export default function ShotgunChoiceModal({
           >
             <span className={styles.icon}>🤝</span>
             <span className={styles.buttonText}>ยึดปืนมาใช้เอง</span>
-            <span className={styles.description}>เพิ่มไพ่ปืนให้คุณ (สูงสุด 3 ใบ)</span>
+            <span className={styles.description}>เพิ่มไพ่ปืนให้คุณ (สูงสุด 2 ใบ)</span>
           </button>
           
           <button
@@ -44,8 +44,8 @@ export default function ShotgunChoiceModal({
             onClick={() => onChoose(battleId, 'kill_opponent')}
           >
             <span className={styles.icon}>💀</span>
-            <span className={styles.buttonText}>ใช้ปืนยิงฝั่งตรงข้าม</span>
-            <span className={styles.description}>{loserName} จะถูกกำจัดออกจากเกม</span>
+            <span className={styles.buttonText}>ทำ damage</span>
+            <span className={styles.description}>{loserName} เสีย HP 1</span>
           </button>
         </div>
         
